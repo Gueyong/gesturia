@@ -1,0 +1,22 @@
+{
+  "name": "gesturia-app",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Gesturia frontend monorepo — GestSolo (learn), Gesturia (translate), GestLea (schools) for web (Next.js) + mobile (Expo), sharing one typed API client, design system, and 3D Signer.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "web:gesturia": "npm --workspace @gesturia/web-gesturia run dev",
+    "web:gestsolo": "npm --workspace @gesturia/web-gestsolo run dev",
+    "web:gestlea": "npm --workspace @gesturia/web-gestlea run dev",
+    "mobile": "npm --workspace @gesturia/mobile run start"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "^0.10.14"
+  }
+}
