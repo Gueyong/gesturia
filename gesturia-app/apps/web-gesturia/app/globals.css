@@ -1,0 +1,188 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import "@fortawesome/fontawesome-svg-core/styles.css";
+
+/* ============================================================
+   Gesturia broadcast design system  (light / coral / grotesk)
+   ============================================================ */
+:root {
+  color-scheme: light;
+  /* canvas family = brand CREAM (#F3E9D8), panels warm white */
+  --canvas:    #F3E9D8;
+  --canvas-2:  #F7F0E2;
+  --panel:     #FFFDF8;
+  --panel-2:   #F8F2E4;
+  --panel-3:   #F1E8D4;
+  --ink:       #1C1A17;   /* Gesturia brand ink */
+  --ink-soft:  #6C6455;
+  --muted:     #9C9179;
+  --line:      #E8DFC9;
+  --line-2:    #DDD2B6;
+  --coral:     #E8553A;   /* brand coral */
+  --coral-600: #CF4629;
+  --coral-soft:#FAE6DF;
+  --gold:      #F4B81F;   /* brand gold */
+  --emerald:   #3E8E5A;   /* brand emerald */
+  --indigo:    #2E5FA3;   /* brand indigo */
+  --cream:     #F3E9D8;   /* brand cream */
+  --black:     #1C1A17;
+  --live:      #E8553A;
+  --green:     #3E8E5A;
+  --radius-xl: 30px;
+  --radius-lg: 24px;
+  --radius-md: 18px;
+  --radius-sm: 13px;
+  --shadow-card: 0 14px 40px rgba(26, 20, 10, 0.08);
+  --shadow-soft: 0 6px 18px rgba(26, 20, 10, 0.05);
+  --shadow-pop:  0 20px 50px rgba(26, 20, 10, 0.16);
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-sans, "Inter"), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv11", "ss01";
+}
+.display { font-family: var(--font-display, var(--font-sans)), sans-serif; letter-spacing: -0.02em; }
+
+/* ---- surfaces ---- */
+.g-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+.g-inset { background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius-md); }
+
+/* ---- buttons ---- */
+.g-pill {
+  display: inline-flex; align-items: center; justify-content: center; gap: .55rem;
+  border-radius: 999px; font-weight: 600; font-size: .92rem; line-height: 1;
+  padding: .8rem 1.35rem; border: 1px solid transparent; cursor: pointer;
+  transition: transform .12s ease, background .15s ease, box-shadow .15s ease, opacity .15s;
+  white-space: nowrap; user-select: none;
+}
+.g-pill:active { transform: translateY(1px); }
+.g-pill:disabled { opacity: .5; cursor: default; }
+.g-dark  { background: var(--black); color: #fff; }
+.g-dark:hover  { background: #241f16; }
+.g-coral { background: var(--coral); color: #fff; box-shadow: 0 8px 20px rgba(240,86,47,.28); }
+.g-coral:hover { background: var(--coral-600); }
+.g-soft  { background: var(--panel-3); color: var(--ink); border-color: var(--line-2); }
+.g-soft:hover { background: #E7E4DC; }
+
+.g-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; border-radius: 999px;
+  background: var(--panel); border: 1px solid var(--line); color: var(--ink);
+  cursor: pointer; transition: background .15s, transform .12s, box-shadow .15s;
+  box-shadow: var(--shadow-soft);
+}
+.g-icon:hover { background: var(--panel-2); }
+.g-icon:active { transform: translateY(1px); }
+
+/* ---- chips ---- */
+.g-chip {
+  display: inline-flex; align-items: center; gap: .4rem;
+  background: var(--panel); border: 1px solid var(--line-2); color: var(--ink);
+  border-radius: 999px; padding: .38rem .8rem; font-size: .8rem; font-weight: 500;
+}
+.g-chip .dot { width: 7px; height: 7px; border-radius: 999px; background: var(--coral); }
+.g-chip-used  { background: var(--emerald); color: #F0FBF4; border-color: transparent; }
+.g-chip-used .dot { background: #BFF0D4; }
+.g-chip-spell { background: var(--coral-soft); color: var(--coral-600); border-color: transparent; }
+.g-chip-gold  { background: #FBF0D2; color: #8A6410; border-color: transparent; }
+.g-chip-gold .dot { background: var(--gold); }
+
+/* brand accent buttons + icon tiles (coral / gold / emerald / indigo — the Gesturia palette) */
+.g-gold    { background: var(--gold); color: #2A2108; box-shadow: 0 8px 20px rgba(244,184,31,.3); }
+.g-gold:hover { background: #E0A716; }
+.g-emerald { background: var(--emerald); color: #fff; box-shadow: 0 8px 20px rgba(62,142,90,.28); }
+.g-emerald:hover { background: #357A4D; }
+.g-indigo  { background: var(--indigo); color: #fff; box-shadow: 0 8px 20px rgba(46,95,163,.28); }
+.g-indigo:hover { background: #274F89; }
+.tile { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; color: #fff; font-size: 18px; }
+.tile-coral   { background: var(--coral); }
+.tile-gold    { background: var(--gold); color: #2A2108; }
+.tile-emerald { background: var(--emerald); }
+.tile-indigo  { background: var(--indigo); }
+.tile-ink     { background: var(--ink); }
+
+/* ---- labels + inputs ---- */
+.g-label { font-size: .72rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.g-input {
+  width: 100%; background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: var(--radius-md); color: var(--ink); padding: .85rem 1rem; font-size: .95rem;
+  outline: none; transition: border-color .15s, background .15s; font-family: inherit;
+}
+.g-input:focus { border-color: var(--coral); background: #fff; }
+.g-input::placeholder { color: var(--muted); }
+
+/* ---- live badge ---- */
+.g-live {
+  display: inline-flex; align-items: center; gap: .45rem;
+  font-size: .78rem; font-weight: 700; letter-spacing: .03em;
+  padding: .4rem .8rem; border-radius: 999px; background: #fff; border: 1px solid var(--line);
+}
+.g-live .pulse { width: 8px; height: 8px; border-radius: 999px; background: var(--live); box-shadow: 0 0 0 0 rgba(240,86,47,.5); animation: pulse 1.6s infinite; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(240,86,47,.5);} 70% { box-shadow: 0 0 0 9px rgba(240,86,47,0);} 100% { box-shadow: 0 0 0 0 rgba(240,86,47,0);} }
+
+/* ---- mic level meter ---- */
+.meter { display: flex; align-items: flex-end; gap: 3px; height: 26px; }
+.meter i { width: 3px; border-radius: 3px; background: currentColor; opacity: .85; transition: height .06s linear; }
+
+/* scrollbars */
+.thin::-webkit-scrollbar { width: 8px; height: 8px; }
+.thin::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 999px; }
+.thin::-webkit-scrollbar-track { background: transparent; }
+
+@keyframes floatIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.floatIn { animation: floatIn .35s ease both; }
+
+/* ============================================================
+   Realtime captions + phrase history (2026-07-04)
+   ============================================================ */
+.capbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  min-height: 44px; padding: 10px 14px; border-radius: 14px;
+  background: var(--panel-2); border: 1px solid var(--line);
+  font-size: 15px; line-height: 1.4;
+}
+.cap-word {
+  animation: wordIn .22s ease-out both;
+  color: var(--ink); font-weight: 600;
+}
+.cap-interim {
+  color: var(--coral); font-style: italic; opacity: .85;
+  animation: interimPulse 1.2s ease-in-out infinite;
+}
+@keyframes wordIn {
+  from { opacity: 0; transform: translateY(6px) scale(.96); filter: blur(2px); }
+  to   { opacity: 1; transform: none; filter: none; }
+}
+@keyframes interimPulse {
+  0%, 100% { opacity: .85; } 50% { opacity: .5; }
+}
+
+/* broadcast lower-third caption inside the stage */
+.stage-caption {
+  position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
+  max-width: 86%; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px;
+  padding: 8px 16px; border-radius: 999px;
+  background: rgba(10, 14, 26, .62); backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,.12);
+  font-size: 14.5px; color: #fff;
+}
+.stage-caption .cap-word { color: #fff; }
+.stage-caption .cap-interim { color: #ffb4a1; }
+
+.phrase-row {
+  padding: 7px 11px; border-radius: 11px;
+  background: var(--panel-2); border: 1px solid var(--line);
+  animation: wordIn .25s ease-out both;
+}
