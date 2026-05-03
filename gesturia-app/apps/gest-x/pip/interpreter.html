@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Gest-X — Olo is signing</title>
+<style>
+  /* Gesturia brand — warm cream UI, coral/gold accents, dark avatar stage (matches the studio). */
+  :root {
+    --panel:#FFFDF8; --panel-2:#F8F2E4; --panel-3:#F1E8D4;
+    --ink:#1C1A17; --ink-soft:#6C6455; --muted:#9C9179;
+    --line:#E8DFC9; --line-2:#DDD2B6;
+    --coral:#E8553A; --coral-600:#CF4629; --coral-soft:#FAE6DF; --gold:#F4B81F;
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:var(--panel-2); color:var(--ink);
+    font-family:"Inter",-apple-system,"Segoe UI",Roboto,system-ui,sans-serif; overflow:hidden;
+    -webkit-font-smoothing:antialiased; }
+  #app { display:flex; flex-direction:column; height:100vh; }
+  header { display:flex; align-items:center; gap:9px; padding:10px 12px; background:var(--panel);
+    border-bottom:1px solid var(--line); }
+  .logo { width:24px;height:24px;border-radius:8px;background:linear-gradient(135deg,var(--coral),var(--gold));
+    display:grid;place-items:center;font-weight:800;font-size:13px;color:#fff;
+    box-shadow:0 2px 8px rgba(232,85,58,.28); }
+  .title { font-weight:700; font-size:13px; letter-spacing:-.01em; line-height:1.05; }
+  .title small { color:var(--muted); font-weight:500; font-size:10.5px; display:block; margin-top:1px; letter-spacing:0; }
+  #qdepth { margin-left:auto; font-size:11.5px; font-weight:600; display:inline-flex; align-items:center; gap:5px; color:var(--muted); }
+  #qdepth .dot { width:6px; height:6px; border-radius:50%; background:currentColor; }
+  #pin { margin-left:8px; padding:5px 8px; }
+
+  /* stage + subtitle overlay: the transcript reads as CAPTIONS over the avatar, so it's legible even
+     in a tiny PiP window and never fights the text input for space. */
+  #stagewrap { position:relative; flex:1; min-height:0; overflow:hidden; }
+  #stage { width:100%; height:100%; display:block;
+    background:radial-gradient(120% 90% at 50% 0%, #1a2340 0%, #0c1122 60%, #080b16 100%); }
+  #cap { position:absolute; left:0; right:0; bottom:0; padding:26px 16px 12px;
+    background:linear-gradient(to top, rgba(8,11,22,.90) 0%, rgba(8,11,22,.62) 55%, rgba(8,11,22,0) 100%);
+    color:#fff; font-size:16px; font-weight:650; line-height:1.34; text-align:center;
+    text-shadow:0 1px 4px rgba(0,0,0,.75); pointer-events:none;
+    display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; overflow:hidden; }
+  #cap:empty { display:none; }
+  #cap .word { opacity:.72; }
+  #cap .word.fresh { opacity:1; color:var(--gold); }   /* the newest words glow so you track what he just heard */
+
+  .bar { display:flex; align-items:center; gap:6px; padding:9px 12px; background:var(--panel);
+    border-top:1px solid var(--line); }
+  button { background:var(--panel-2); color:var(--ink); border:1px solid var(--line-2); border-radius:11px;
+    padding:8px 10px; font-size:12px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:6px;
+    transition:border-color .15s, background .15s, color .15s; }
+  button:hover { border-color:var(--coral); }
+  button.on { background:linear-gradient(135deg,var(--coral),var(--coral-600)); border-color:transparent; color:#fff;
+    box-shadow:0 3px 10px rgba(232,85,58,.3); }
+  #speed { font-weight:800; min-width:46px; justify-content:center; }
+  .grow { flex:1; }
+
+  /* text input is HIDDEN by default (⌨️ toggles it) so it never overlays the captions */
+  .row2 { display:flex; gap:7px; padding:9px 12px; background:var(--panel); border-top:1px solid var(--line); }
+  .row2[hidden] { display:none; }
+  #textin { flex:1; background:#fff; border:1px solid var(--line-2); border-radius:11px; color:var(--ink);
+    padding:9px 11px; font-size:13px; outline:none; }
+  #textin:focus { border-color:var(--coral); }
+  #send { background:linear-gradient(135deg,var(--coral),var(--coral-600)); color:#fff; border-color:transparent; }
+  #status { padding:6px 12px 9px; font-size:11px; color:var(--muted); background:var(--panel); }
+</style>
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div class="logo">G</div>
+      <div class="title">Gest-X <small>Olo signs what you hear</small></div>
+      <span id="qdepth"></span>
+      <button id="pin" title="Float over everything (Picture-in-Picture)">📌</button>
+    </header>
+
+    <div id="stagewrap">
+      <canvas id="stage"></canvas>
+      <div id="cap"></div>
+    </div>
+
+    <div class="bar">
+      <button class="src" data-k="mic" title="Interpret your microphone">🎤 Mic</button>
+      <button class="src" data-k="system" title="Interpret any app / movie audio on this PC">🖥️ System</button>
+      <button class="src" data-k="tab" title="Interpret the audio playing in your browser tab">📑 Tab</button>
+      <span class="grow"></span>
+      <button id="kbd" title="Type text to sign">⌨️</button>
+      <button id="pause" title="Pause / resume signing">⏸</button>
+      <button id="speed" title="Signing speed — slow to learn, faster to skim">1×</button>
+    </div>
+
+    <div class="row2" id="inputRow" hidden>
+      <input id="textin" placeholder="Type text to sign…" />
+      <button id="send">Sign</button>
+    </div>
+
+    <div id="status">pick a source to interpret</div>
+  </div>
+  <script type="module" src="./interpreter.js"></script>
+</body>
+</html>

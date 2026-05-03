@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "Gest-X — Gesturia everywhere",
+  "version": "0.2.0",
+  "description": "The world, signed. A self-contained floating sign-language interpreter: sign your mic, this tab, or ANY app/movie audio on your PC — overlaid anywhere.",
+  "permissions": ["contextMenus", "tabCapture", "activeTab", "tabs", "storage"],
+  "host_permissions": ["http://localhost:8020/*", "http://127.0.0.1:8020/*"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_title": "Gest-X: open the interpreter (mic / tab / any app audio)" }
+}
