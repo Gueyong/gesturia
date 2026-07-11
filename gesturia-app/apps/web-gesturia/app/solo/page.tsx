@@ -326,6 +326,7 @@ export default function Solo() {
           <nav>
             <a href="/studio">Gestlingua</a>
             <a href="/evaluate">sign judge</a>
+            <a href="/certificates">certificates</a>
             <a href="/">home</a>
           </nav>
         </footer>

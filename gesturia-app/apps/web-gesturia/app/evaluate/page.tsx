@@ -4,6 +4,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faVideo, faMagnifyingGlass, faHandsAslInterpreting } from "@fortawesome/free-solid-svg-icons";
 import MeshSigner, { type MeshClip } from "../../components/MeshSigner";
 import SignEvaluator from "../../components/SignEvaluator";
+import AuthButton from "../../components/AuthButton";
 
 /** /evaluate — the Gesturia sign judge, standalone. Pick any sign in the dictionary, watch the 3D
  *  reference, perform it to your camera, and get graded on handshape / location / movement / palm
@@ -71,6 +72,7 @@ export default function EvaluatePage() {
           <a href="/solo" className="g-pill g-soft">
             <FontAwesomeIcon icon={faHandsAslInterpreting} /> Gestsolo lessons
           </a>
+          <AuthButton />
         </header>
 
         {/* picker */}
