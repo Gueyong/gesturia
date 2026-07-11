@@ -8,6 +8,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import LessonPlayer, { type Lesson } from "./LessonPlayer";
 import EvaluatorView from "./EvaluatorView";
+import AuthButton from "../../components/AuthButton";
 import "./solo.css";
 
 /** GESTSOLO — "Duolingo for hands." (docs/GESTURIA_SOUL.md)
@@ -221,6 +222,7 @@ export default function Solo() {
             <span className="solo-stat" title="Experience points"><FontAwesomeIcon icon={faBolt} /> {xp} XP</span>
             <span className="solo-stat" title="Hearts left"><FontAwesomeIcon icon={faHeart} /> {hearts}</span>
           </div>
+          <div style={{ marginLeft: "auto" }}><AuthButton /></div>
         </header>
 
         {active ? (
