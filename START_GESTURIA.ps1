@@ -17,8 +17,25 @@ $web = Get-NetTCPConnection -State Listen -LocalPort 3003 | Select-Object -First
 if ($web) { taskkill /PID $web.OwningProcess /T /F | Out-Null }
 Start-Sleep 2
 
+# 0.5) database — start the local PostgreSQL (native binaries) if it isn't already running.
+# Persistence layer for accounts, learning progress, evaluations, certificates, broadcasts.
+$pgBin  = "C:\gesturia-train\pgsql\bin"
+$pgLib  = "C:\gesturia-train\pgsql\lib"
+$pgData = "C:\gesturia-train\pgdata"
+if (Test-Path "$pgBin\pg_ctl.exe") {
+  # forked postgres backends load DLLs from lib — without it on PATH they die with 0xC0000142
+  $env:PATH = "$pgBin;$pgLib;$env:PATH"
+  & "$pgBin\pg_ctl.exe" -D $pgData status *> $null
+  if ($LASTEXITCODE -ne 0) {
+    Write-Host "  starting PostgreSQL :5432..." -ForegroundColor Gray
+    & "$pgBin\pg_ctl.exe" -D $pgData -l "$pgData\server.log" -o "-p 5432" start *> $null
+    for ($i = 0; $i -lt 20; $i++) { Start-Sleep 1; & "$pgBin\pg_isready.exe" -h 127.0.0.1 -p 5432 *> $null; if ($LASTEXITCODE -eq 0) { break } }
+  }
+}
+
 # 1) the engine (API :8020) — bound to the network so phones can join
 $env:PYTHONUNBUFFERED = "1"
+$env:LMS_DATABASE_URL = "postgresql+psycopg2://gesturia:gesturia_dev_secret@127.0.0.1:5432/gesturia"
 $env:GESTURIA_MESH_DEV = "cuda"        # GPU is free -> fast mesh; falls back to CPU automatically on OOM
 $env:GESTURIA_NLP_DEV = "cuda"         # MiniLM + Qwen (synonyms / context-aware typo) on GPU
 $env:GESTURIA_WHISPER_DEVICE = "cuda"  # multilingual speech-to-sign on GPU (auto CPU fallback)
