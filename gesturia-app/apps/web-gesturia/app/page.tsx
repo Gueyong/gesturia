@@ -6,6 +6,7 @@ import {
   faArrowRight, faHeart, faGlobe, faCirclePlay, faCertificate, faGamepad,
 } from "@fortawesome/free-solid-svg-icons";
 import MeshSigner, { type MeshClip } from "../components/MeshSigner";
+import AuthButton from "../components/AuthButton";
 
 const API = typeof window !== "undefined" ? `http://${window.location.hostname === "localhost" ? "127.0.0.1" : window.location.hostname}:8020`
   : (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8020");
@@ -69,6 +70,7 @@ export default function Home() {
             <a href="/studio" className="g-pill g-coral" style={{ padding: ".6rem 1.1rem", textDecoration: "none" }}>
               Open Gestlingua <FontAwesomeIcon icon={faArrowRight} />
             </a>
+            <AuthButton />
           </div>
         </nav>
 
