@@ -11,6 +11,10 @@ import { PageShell } from "../parts";
 import Certificate from "../Certificate";
 import { SERIAL_RE, normalizeSerial, lookupSerial, type Gestificate } from "../registry";
 
+const API = typeof window !== "undefined"
+  ? `http://${window.location.hostname === "localhost" ? "127.0.0.1" : window.location.hostname}:8020`
+  : (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8020");
+
 type Verdict = "checking" | "valid" | "notfound" | "badformat";
 
 export default function VerifyResult({ params }: { params: { id: string } }) {
@@ -22,14 +26,37 @@ export default function VerifyResult({ params }: { params: { id: string } }) {
   const [cert, setCert] = useState<Gestificate | null>(null);
 
   useEffect(() => {
-    // a deliberate beat — the registry is being consulted, and it reads that way
-    const t = setTimeout(() => {
+    let alive = true;
+    (async () => {
       if (!SERIAL_RE.test(serial)) { setVerdict("badformat"); return; }
+      // 1) the live public registry (database) — every real Gestificate verifies here
+      try {
+        const r = await fetch(`${API}/v1/learn/certificates/${encodeURIComponent(serial)}/verify`);
+        if (r.ok) {
+          const d = await r.json();
+          if (d?.is_valid && alive) {
+            const fr = /fran|lsf|lsaf/i.test(String(d.course_title || ""));
+            setCert({
+              serial: d.certificate_number || serial,
+              holder: d.student_name || "Gesturia learner",
+              course: d.course_title || "—",
+              score: typeof d.score === "number" ? d.score : 100,
+              date: d.issued_at || "",
+              surface: d.signed_by || "Gesturia",
+              language: fr ? "LSAF · Langue des Signes d'Afrique Francophone" : "ASL · American Sign Language",
+            });
+            setVerdict("valid");
+            return;
+          }
+        }
+      } catch { /* engine offline — fall back to the built-in / local registry */ }
+      // 2) built-in demo entries + anything Gestsolo wrote to localStorage
+      if (!alive) return;
       const hit = lookupSerial(serial);
       if (hit) { setCert(hit); setVerdict("valid"); }
       else setVerdict("notfound");
-    }, 450);
-    return () => clearTimeout(t);
+    })();
+    return () => { alive = false; };
   }, [serial]);
 
   useEffect(() => {
