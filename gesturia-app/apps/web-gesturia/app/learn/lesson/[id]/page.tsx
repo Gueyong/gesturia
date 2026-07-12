@@ -15,8 +15,11 @@ const API = typeof window !== "undefined"
   ? `http://${window.location.hostname === "localhost" ? "127.0.0.1" : window.location.hostname}:8020`
   : (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8020");
 
-/** derive a signable target word/letter from a produce-style prompt, e.g. "Fingerspell the letter 'A'". */
+/** derive a signable target word/letter for the avatar. Generated recognition exercises carry the target in
+ *  media_url="sign:<word>" (so the answer isn't in the prompt) — the avatar shows it while the word stays
+ *  hidden. Otherwise fall back to a quoted target in the prompt (e.g. "Fingerspell the letter 'A'"). */
 function deriveTarget(ex: ExerciseOut): string | null {
+  if (ex.media_url && ex.media_url.startsWith("sign:")) return ex.media_url.slice(5);
   if (ex.type === "sign_to_text") return null;          // answer is hidden — don't reveal it via the avatar
   const m = ex.prompt.match(/['"“”]([A-Za-z][A-Za-z .'-]*)['"“”]/);
   if (m) return m[1];
@@ -159,7 +162,7 @@ export default function LessonPlayer() {
               <div style={{ position: "relative", aspectRatio: "4 / 3", borderRadius: 14, overflow: "hidden", border: "1px solid var(--line,#E8DFC9)", marginBottom: 14 }}>
                 <MeshSigner queue={[clip]} loop rate={0.75} hint={false} />
               </div>
-            ) : ex.media_url ? (
+            ) : ex.media_url && !ex.media_url.startsWith("sign:") ? (
               <video src={`${API}${ex.media_url}`} autoPlay loop muted playsInline
                 style={{ width: "100%", borderRadius: 14, marginBottom: 14, background: "#0c1122" }}
                 onError={(e) => { (e.currentTarget as HTMLVideoElement).style.display = "none"; }} />
