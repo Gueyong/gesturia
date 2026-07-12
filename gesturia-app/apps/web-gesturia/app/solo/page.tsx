@@ -263,6 +263,9 @@ export default function Solo() {
                   <button className="g-pill g-soft" onClick={() => setEvalMode(true)} title="Sign to your camera and get scored">
                     <FontAwesomeIcon icon={faVideo} /> Practice with camera
                   </button>
+                  <a href="/learn" className="g-pill g-soft" style={{ textDecoration: "none" }} title="Real courses with progress saved to your account">
+                    <FontAwesomeIcon icon={faClock} /> Your saved courses
+                  </a>
                   <span className="solo-mins">≈ 3 minutes a stone · +40 XP each</span>
                 </div>
               </div>
@@ -324,6 +327,7 @@ export default function Solo() {
             Gest walks the path with you. — <i>Gesturia, a country of gestures</i>
           </div>
           <nav>
+            <a href="/learn">courses</a>
             <a href="/studio">Gestlingua</a>
             <a href="/evaluate">sign judge</a>
             <a href="/certificates">certificates</a>

@@ -62,7 +62,8 @@ export default function LessonPlayer() {
     setClip(null);
     if (!ex) return;
     const target = deriveTarget(ex);
-    if (!target) return;
+    // single letters (fingerspell) don't resolve to a standalone mesh sign — skip to avoid dead requests
+    if (!target || target.replace(/[^A-Za-z]/g, "").length < 2) return;
     let alive = true;
     fetch(`${API}/v1/smplx/translate`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: target }) })
       .then((r) => (r.ok ? r.json() : null))
