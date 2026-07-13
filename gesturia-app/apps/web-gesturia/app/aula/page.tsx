@@ -95,6 +95,8 @@ function PencilBar({ value }: { value: number }) {
 
 export default function AulaPage() {
   const [view, setView] = useState<"compose" | "live">("compose");
+  const [roster, setRoster] = useState(ROSTER);
+  const [classInfo, setClassInfo] = useState<{ institution?: string; classroom?: string; teacher?: string; count?: number }>({});
   const [title, setTitle] = useState(SAMPLE_TITLE);
   const [text, setText] = useState(SAMPLE_TEXT);
   const [draftLoaded, setDraftLoaded] = useState(false);
@@ -129,6 +131,16 @@ export default function AulaPage() {
     try {
       setDateLine(new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }));
     } catch { setDateLine(""); }
+  }, []);
+
+  /* the REAL class behind Gestaula — roster from the school DB, falling back to the sample if offline */
+  useEffect(() => {
+    fetch(`${API}/v1/learn/learn/gestaula/class`).then((r) => r.json()).then((c) => {
+      if (c?.students?.length) {
+        setRoster(c.students.map((s: any) => ({ name: s.name, present: !!s.present, progress: s.progress ?? 0 })));
+        setClassInfo({ institution: c.institution, classroom: c.classroom, teacher: c.teacher, count: c.count });
+      }
+    }).catch(() => { /* keep the representative roster */ });
   }, []);
 
   useEffect(() => {
@@ -510,14 +522,14 @@ export default function AulaPage() {
               <div className="aula-pad" style={{ paddingTop: 22 }}>
                 <div className="aula-labelrow">
                   <div>
-                    <div className="aula-serif" style={{ fontWeight: 600, fontSize: 17 }}>Classe de 6e — INJS Yaoundé</div>
-                    <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>8 élèves · {ROSTER.filter((r) => r.present).length} présents aujourd&rsquo;hui</div>
+                    <div className="aula-serif" style={{ fontWeight: 600, fontSize: 17 }}>{classInfo.classroom || "Classe de 6e — INJS Yaoundé"}</div>
+                    <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{classInfo.count ?? roster.length} élèves · {roster.filter((r) => r.present).length} présents aujourd&rsquo;hui{classInfo.teacher ? ` · ${classInfo.teacher}` : ""}</div>
                   </div>
                   <span className="aula-hand" style={{ fontSize: 16, color: "var(--muted)" }}>carnet du maître</span>
                 </div>
 
                 <ul className="aula-roster-list">
-                  {ROSTER.map((s) => (
+                  {roster.map((s) => (
                     <li key={s.name} className="aula-pupil">
                       <span className={`aula-dot ${s.present ? "is-here" : "is-away"}`}
                         title={s.present ? "présent" : "absent"} aria-label={s.present ? "present" : "absent"} />
