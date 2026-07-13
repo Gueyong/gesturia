@@ -76,6 +76,11 @@ foreach ($i in 1..40) {
 $ip = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -match '^192\.168\.|^10\.' } | Select-Object -First 1).IPAddress
 
 if ($ok) {
+  # pre-compile the pages so the FIRST live visit is instant (next dev compiles per-page on first hit)
+  Write-Host "  warming pages..." -ForegroundColor Gray
+  foreach ($pg in @("/", "/studio", "/solo", "/evaluate", "/aula", "/learn", "/verify", "/gestx")) {
+    try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 40 "http://127.0.0.1:3003$pg" | Out-Null } catch {}
+  }
   Write-Host ""
   Write-Host "  GESTURIA IS LIVE" -ForegroundColor Green
   Write-Host "  ----------------------------------------"
