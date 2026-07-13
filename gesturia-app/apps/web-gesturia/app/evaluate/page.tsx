@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faVideo, faMagnifyingGlass, faHandsAslInterpreting, faDice, faEye, faEyeSlash } from "@fortawesome/free-solid-svg-icons";
+import { faVideo, faMagnifyingGlass, faHandsAslInterpreting, faDice, faEye, faEyeSlash, faGraduationCap, faPlus } from "@fortawesome/free-solid-svg-icons";
 import MeshSigner, { type MeshClip } from "../../components/MeshSigner";
 import SignEvaluator from "../../components/SignEvaluator";
 import AuthButton from "../../components/AuthButton";
@@ -23,19 +23,25 @@ export default function EvaluatePage() {
   const [clip, setClip] = useState<MeshClip | null>(null);
   const [lang, setLang] = useState("en");   // coach review language (EN/FR — bilingual events)
   const [status, setStatus] = useState<"idle" | "checking" | "notfound" | "ready" | "offline">("idle");
-  const [mode, setMode] = useState<"grade" | "challenge">("grade");
+  const [mode, setMode] = useState<"grade" | "challenge" | "teach">("grade");
   const [deck, setDeck] = useState<string[]>([]);          // signs the evaluator can recognize
   const [challengeWord, setChallengeWord] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<string[] | undefined>(undefined);
+  const [teachQuery, setTeachQuery] = useState("");
+  const [teachWord, setTeachWord] = useState<string | null>(null);
+
+  const refreshDeck = useCallback(() => {
+    fetch(`${API}/v1/eval/signs`).then((r) => r.json())
+      .then((s) => setDeck((s.signs || []) as string[])).catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch(`${API}/v1/eval/status`).then((r) => r.json())
       .then((s) => { if (!s.ready) setStatus("offline"); }).catch(() => setStatus("offline"));
     fetch(`${API}/v1/smplx/vocab`).then((r) => r.json())
       .then((v) => setVocab(new Set((v.signs || []) as string[]))).catch(() => {});
-    fetch(`${API}/v1/eval/signs`).then((r) => r.json())
-      .then((s) => setDeck((s.signs || []) as string[])).catch(() => {});
-  }, []);
+    refreshDeck();
+  }, [refreshDeck]);
 
   // word-only challenge: pick a random recognizable sign; hand the evaluator a small candidate set
   // (the target + a few distractors) so recognition is sharp without revealing the sign.
@@ -79,9 +85,11 @@ export default function EvaluatePage() {
             <div style={{ fontSize: 12.5, color: "var(--muted,#9C9179)" }}>watch it · do it · be graded on precision</div>
           </div>
           <div style={{ marginLeft: "auto", display: "flex", gap: 4, background: "var(--panel-2)", padding: 3, borderRadius: 999, border: "1px solid var(--line)" }}>
-            {[["grade", "Grade", faEye], ["challenge", "Challenge", faEyeSlash]].map(([c, l, ic]: any) => (
+            {[["grade", "Grade", faEye, "Watch the sign, then perform it for a precision score."],
+              ["challenge", "Challenge", faEyeSlash, "Word only — no demo. Perform it; the evaluator recognizes it."],
+              ["teach", "Teach", faGraduationCap, "Perform a NEW sign — MediaPipe captures it and grows the vocabulary."]].map(([c, l, ic, tip]: any) => (
               <button key={c} onClick={() => { setMode(c); if (c === "challenge" && !challengeWord) newChallenge(); }}
-                className="g-pill" title={c === "challenge" ? "Word only — no demo. Perform it; the evaluator recognizes it." : "Watch the sign, then perform it for a precision score."}
+                className="g-pill" title={tip}
                 style={{ padding: ".3rem .7rem", fontSize: ".74rem", fontWeight: 700, boxShadow: "none",
                   background: mode === c ? "var(--coral)" : "transparent", color: mode === c ? "#fff" : "var(--ink-soft)" }}>
                 <FontAwesomeIcon icon={ic} /> {l}
@@ -182,6 +190,50 @@ export default function EvaluatePage() {
               </div>
             </section>
           )
+        )}
+
+        {/* ── TEACH mode: perform a NEW sign → MediaPipe captures it → the vocabulary grows ── */}
+        {mode === "teach" && (
+          <section className="g-card" style={{ padding: 16 }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
+              <div style={{ position: "relative", flex: "1 1 240px" }}>
+                <FontAwesomeIcon icon={faGraduationCap} style={{ position: "absolute", left: 12, top: 12, color: "var(--muted)" }} />
+                <input className="g-input" value={teachQuery} onChange={(e) => setTeachQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && teachQuery.trim() && setTeachWord(teachQuery.trim().toUpperCase())}
+                  placeholder="Teach a new sign, e.g. cameroon" style={{ width: "100%", padding: ".62rem .8rem .62rem 2rem", fontSize: 14 }} />
+              </div>
+              <button className="g-pill g-coral" onClick={() => teachQuery.trim() && setTeachWord(teachQuery.trim().toUpperCase())} disabled={!teachQuery.trim()}>
+                <FontAwesomeIcon icon={faPlus} /> Teach this sign
+              </button>
+              <span style={{ fontSize: 12.5, color: "var(--muted)" }}>vocabulary: <b style={{ color: "var(--ink-soft)" }}>{deck.length}</b> signs the evaluator knows</span>
+            </div>
+            {teachWord ? (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                <div>
+                  <div className="g-label" style={{ marginBottom: 8 }}>Teaching · “{teachWord.toLowerCase()}”</div>
+                  <div style={{ aspectRatio: "4 / 3", borderRadius: 16, border: "1px dashed var(--line,#E8DFC9)", display: "grid", placeItems: "center", textAlign: "center", padding: 20, background: "var(--panel-2,#F8F2E4)" }}>
+                    <div>
+                      <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 8, letterSpacing: ".04em" }}>PERFORM THIS SIGN</div>
+                      <div className="display" style={{ fontSize: 38, fontWeight: 800, lineHeight: 1.05 }}>{teachWord.toLowerCase()}</div>
+                      <p style={{ marginTop: 12, fontSize: 12, color: "var(--muted)", maxWidth: 270 }}>
+                        Sign it clearly to the camera. MediaPipe reads your pose and hands and adds it to the dictionary —
+                        the evaluator can then grade and recognize it, and it joins the Challenge deck.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <div className="g-label" style={{ marginBottom: 8 }}>Your camera</div>
+                  <SignEvaluator api={API} gloss={teachWord} mode="teach" onEnrolled={refreshDeck} key={teachWord} />
+                </div>
+              </div>
+            ) : (
+              <div style={{ padding: 30, textAlign: "center", color: "var(--muted)" }}>
+                <FontAwesomeIcon icon={faGraduationCap} style={{ fontSize: 28, opacity: 0.5 }} />
+                <p style={{ marginTop: 10, fontSize: 14 }}>Type a word and perform it — this is how the vocabulary grows from real people signing.</p>
+              </div>
+            )}
+          </section>
         )}
       </div>
     </main>
