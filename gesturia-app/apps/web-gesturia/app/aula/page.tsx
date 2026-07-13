@@ -3,9 +3,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faPlay, faPause, faRotateLeft, faPen, faCheck, faSpinner, faHandPointRight,
-  faThumbtack, faHourglassHalf, faChalkboardUser, faTriangleExclamation,
+  faThumbtack, faChalkboardUser, faTriangleExclamation,
 } from "@fortawesome/free-solid-svg-icons";
 import MeshSigner, { type MeshClip } from "../../components/MeshSigner";
+import AulaLive from "../../components/AulaLive";
 
 // API reached on the same host that served the page — works on localhost AND from phones on the LAN
 const API = typeof window !== "undefined" ? `http://${window.location.hostname === "localhost" ? "127.0.0.1" : window.location.hostname}:8020`
@@ -93,6 +94,7 @@ function PencilBar({ value }: { value: number }) {
 /* ---------- the page ---------- */
 
 export default function AulaPage() {
+  const [view, setView] = useState<"compose" | "live">("compose");
   const [title, setTitle] = useState(SAMPLE_TITLE);
   const [text, setText] = useState(SAMPLE_TEXT);
   const [draftLoaded, setDraftLoaded] = useState(false);
@@ -272,6 +274,19 @@ export default function AulaPage() {
           </div>
         </header>
 
+        {/* ================= mode tabs: prepare a lesson | teach live ================= */}
+        <div className="aula-tabrow" role="tablist" aria-label="Gestaula mode">
+          {([["compose", "Préparer une leçon", "Prepare a lesson"], ["live", "Classe en direct", "Live class"]] as const).map(([v, fr, en]) => (
+            <button key={v} role="tab" aria-selected={view === v} onClick={() => setView(v)} className={`aula-tab ${view === v ? "is-on" : ""}`}>
+              <span className="display" style={{ fontWeight: 700 }}>{fr}</span>
+              <span className="aula-serif" style={{ fontStyle: "italic", opacity: 0.7, marginLeft: 8, fontSize: 13 }}>{en}</span>
+            </button>
+          ))}
+        </div>
+
+        {view === "live" && <AulaLive api={API} />}
+
+        {view === "compose" && (<>
         {/* ================= DESK — composer left, class right ================= */}
         <div className="aula-grid">
 
@@ -525,6 +540,7 @@ export default function AulaPage() {
             </div>
           </section>
         </div>
+        </>)}
 
         {/* ================= THE PROMISE — short, honest ================= */}
         <section className="g-card aula-paper aula-promise">
@@ -535,10 +551,10 @@ export default function AulaPage() {
               The teacher teaches. <b style={{ color: "var(--emerald)" }}>Lea signs.</b> The AI grades all five parameters
               — <InkWord>handshape</InkWord>, <InkWord>orientation</InkWord>, <InkWord>location</InkWord>, <InkWord>movement</InkWord>, <InkWord>expression</InkWord>.
             </p>
-            <div className="g-chip" style={{ marginTop: 12, background: "var(--panel-2)" }}>
-              <FontAwesomeIcon icon={faHourglassHalf} style={{ color: "var(--gold)", fontSize: 12 }} />
-              Sign grading arrives with the GestSolo evaluator (in training).
-            </div>
+            <a className="g-chip" href="/evaluate" style={{ marginTop: 12, background: "var(--panel-2)", textDecoration: "none", color: "inherit" }}>
+              <FontAwesomeIcon icon={faCheck} style={{ color: "var(--emerald)", fontSize: 12 }} />
+              Sign grading is live — 140 signs, handshape · location · movement · orientation. Open the judge →
+            </a>
           </div>
         </section>
 
@@ -581,6 +597,14 @@ const AULA_CSS = `
 
 .aula-grid { display: grid; grid-template-columns: 0.97fr 1.03fr; gap: 22px; align-items: start; margin-top: 22px; }
 .aula-right { display: grid; gap: 20px; }
+
+/* mode tabs — prepare vs teach live */
+.aula-tabrow { display: flex; gap: 8px; margin-top: 20px; flex-wrap: wrap; }
+.aula-tab { display: inline-flex; align-items: baseline; padding: .6rem 1.05rem; border-radius: 12px 12px 0 0;
+  border: 1px solid var(--line); border-bottom: none; background: var(--panel-2); color: var(--ink-soft);
+  cursor: pointer; font-size: 15px; transition: background .15s ease, color .15s ease, transform .15s ease; }
+.aula-tab:hover { background: var(--panel); }
+.aula-tab.is-on { background: var(--panel); color: var(--ink); box-shadow: inset 0 3px 0 var(--emerald); transform: translateY(1px); }
 
 .aula-labelrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 
