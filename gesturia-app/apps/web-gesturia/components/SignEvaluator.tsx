@@ -16,6 +16,11 @@ export type EvalResult = {
   scores: Record<string, number>; distances: Record<string, number>; feedback: string[]; gloss: string;
 };
 
+export type RecogMatch = { gloss: string; score: number; distance: number };
+export type RecogResult = {
+  recognized: string; correct?: boolean; target?: string; matches: RecogMatch[]; confidence?: number | null;
+};
+
 const PARAM_LABEL: Record<string, string> = {
   handshape: "Handshape", location: "Location", movement: "Movement", orientation: "Palm orientation",
 };
@@ -51,8 +56,9 @@ function bodyFrame(pose: number[][]) {
 const toLocal = (p: number[], f: any) => { const d = sub(p, f.origin); return [dot(d, f.x) / f.scale, dot(d, f.up) / f.scale, dot(d, f.z) / f.scale]; };
 const toLocalDir = (d: number[], f: any) => unit([dot(d, f.x), dot(d, f.up), dot(d, f.z)]);
 
-export default function SignEvaluator({ api, gloss, language = "en", onScored }:
-  { api: string; gloss: string; language?: string; onScored?: (r: EvalResult) => void }) {
+export default function SignEvaluator({ api, gloss, language = "en", mode = "grade", candidates, onScored, onRecognized }:
+  { api: string; gloss: string; language?: string; mode?: "grade" | "challenge"; candidates?: string[];
+    onScored?: (r: EvalResult) => void; onRecognized?: (r: RecogResult) => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const handRef = useRef<any>(null);
@@ -67,6 +73,7 @@ export default function SignEvaluator({ api, gloss, language = "en", onScored }:
   const [phase, setPhase] = useState<Phase>("loading");
   const [err, setErr] = useState("");
   const [result, setResult] = useState<EvalResult | null>(null);
+  const [recog, setRecog] = useState<RecogResult | null>(null);
   const [review, setReview] = useState("");
   const [countdown, setCountdown] = useState(0);
   const [hint, setHint] = useState<{ msg: string; ok: boolean }>({ msg: "", ok: false });
@@ -228,13 +235,14 @@ export default function SignEvaluator({ api, gloss, language = "en", onScored }:
 
   useEffect(() => {
     refTrack.current = null;
+    if (mode === "challenge") return;   // word-only challenge: no reference coach that would reveal the sign
     fetch(`${api}/v1/eval/reference/${encodeURIComponent(gloss)}`).then((r) => r.ok ? r.json() : null)
       .then((j) => { if (j) refTrack.current = { location: j.location, orientation: j.orientation }; }).catch(() => {});
-  }, [api, gloss]);
+  }, [api, gloss, mode]);
 
   const record = useCallback(async () => {
     if (!poseRef.current || !handRef.current) return;
-    setResult(null); setReview("");
+    setResult(null); setRecog(null); setReview("");
     for (let c = 3; c >= 1; c--) { setCountdown(c); setPhase("count"); await new Promise((r) => setTimeout(r, 700)); }
     setCountdown(0); setPhase("recording");
     await new Promise<void>((resolve) => {
@@ -244,6 +252,18 @@ export default function SignEvaluator({ api, gloss, language = "en", onScored }:
     if (!data || data.poseSeq.length < 8) { setErr("I couldn't see your upper body — step back so your head, shoulders and hands are all in frame."); setPhase("error"); return; }
     setPhase("scoring");
     const off_track = data.total ? data.offFrames / data.total : 1;
+    if (mode === "challenge") {
+      try {
+        const r = await fetch(`${api}/v1/eval/recognize`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pose: data.poseSeq, hand_l: data.hlSeq, hand_r: data.hrSeq, candidates, target: gloss }),
+        });
+        if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e?.detail || `recognize failed (${r.status})`); }
+        const res: RecogResult = await r.json();
+        setRecog(res); setPhase("result"); onRecognized?.(res);
+      } catch (e: any) { setErr(e?.message || String(e)); setPhase("error"); }
+      return;
+    }
     try {
       const r = await fetch(`${api}/v1/eval/score`, {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -256,7 +276,7 @@ export default function SignEvaluator({ api, gloss, language = "en", onScored }:
         body: JSON.stringify({ gloss, scores: res.scores, corrections: data.corrections, language }) })
         .then((x) => x.json()).then((j) => setReview(j.review || "")).catch(() => {});
     } catch (e: any) { setErr(e?.message || String(e)); setPhase("error"); }
-  }, [api, gloss, language, onScored]);
+  }, [api, gloss, language, mode, candidates, onScored, onRecognized]);
 
   const band = (s: number) => (s >= 85 ? "var(--emerald,#1f9d69)" : s >= 65 ? "var(--gold)" : "var(--coral)");
   const mark = result ? Math.round(result.mark ?? result.overall) : 0;
@@ -304,13 +324,41 @@ export default function SignEvaluator({ api, gloss, language = "en", onScored }:
             <div className="signeval-review">{review || (result.feedback?.[0] ?? "")}</div>
           </div>
         )}
+
+        {recog && (
+          <div className="signeval-scorecard">
+            <div className="signeval-overall" style={{ borderColor: recog.correct ? "var(--emerald,#1f9d69)" : "var(--coral,#E8553A)" }}>
+              <b style={{ color: recog.correct ? "var(--emerald,#1f9d69)" : "var(--coral,#E8553A)", fontSize: 30 }}>{recog.correct ? "✓" : "✗"}</b>
+            </div>
+            <div className="signeval-meta" style={{ fontWeight: 700 }}>
+              {recog.correct
+                ? <span style={{ color: "var(--emerald,#1f9d69)" }}>Yes! That’s the sign for “{(recog.target || gloss).toLowerCase()}”.</span>
+                : <span style={{ color: "var(--coral,#E8553A)" }}>Not quite — that looked more like “{recog.recognized.toLowerCase()}”.</span>}
+            </div>
+            <div className="signeval-bars">
+              {(recog.matches || []).slice(0, 3).map((m, i) => (
+                <div key={m.gloss} className="signeval-bar">
+                  <label>{i === 0 ? "closest" : i === 1 ? "then" : "then"} · {m.gloss.toLowerCase()}</label>
+                  <div className="track"><i style={{ width: `${Math.max(4, m.score)}%`, background: band(m.score) }} /></div>
+                  <b>{Math.round(m.score)}</b>
+                </div>
+              ))}
+            </div>
+            <div className="signeval-review">
+              {recog.correct ? "The evaluator recognized your sign from your movement alone — no demo shown."
+                : "You were shown only the word. Picture the sign, then try again."}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="signeval-controls">
         <button className="g-pill g-coral" onClick={record}
           disabled={!(phase === "ready" || phase === "result" || phase === "error")}>
-          {phase === "recording" ? "Signing…" : phase === "scoring" ? "Grading…"
-            : result ? "Try again" : `Sign “${gloss}” — start (${WINDOW_MS / 1000}s)`}
+          {phase === "recording" ? "Signing…"
+            : phase === "scoring" ? (mode === "challenge" ? "Recognizing…" : "Grading…")
+            : (result || recog) ? "Try again"
+            : `${mode === "challenge" ? "Perform" : "Sign"} “${gloss}” — start (${WINDOW_MS / 1000}s)`}
         </button>
       </div>
     </div>
