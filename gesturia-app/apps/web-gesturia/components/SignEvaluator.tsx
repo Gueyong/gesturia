@@ -57,9 +57,12 @@ function bodyFrame(pose: number[][]) {
 const toLocal = (p: number[], f: any) => { const d = sub(p, f.origin); return [dot(d, f.x) / f.scale, dot(d, f.up) / f.scale, dot(d, f.z) / f.scale]; };
 const toLocalDir = (d: number[], f: any) => unit([dot(d, f.x), dot(d, f.up), dot(d, f.z)]);
 
-export default function SignEvaluator({ api, gloss, language = "en", mode = "grade", candidates, onScored, onRecognized, onEnrolled }:
-  { api: string; gloss: string; language?: string; mode?: "grade" | "challenge" | "teach"; candidates?: string[];
-    onScored?: (r: EvalResult) => void; onRecognized?: (r: RecogResult) => void; onEnrolled?: (r: EnrollResult) => void }) {
+export type CapturedMotion = { pose: number[][][]; hand_l: number[][][]; hand_r: number[][][] };
+
+export default function SignEvaluator({ api, gloss, language = "en", mode = "grade", candidates, onScored, onRecognized, onEnrolled, onCaptured }:
+  { api: string; gloss: string; language?: string; mode?: "grade" | "challenge" | "teach" | "capture"; candidates?: string[];
+    onScored?: (r: EvalResult) => void; onRecognized?: (r: RecogResult) => void; onEnrolled?: (r: EnrollResult) => void;
+    onCaptured?: (m: CapturedMotion) => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const handRef = useRef<any>(null);
@@ -252,6 +255,11 @@ export default function SignEvaluator({ api, gloss, language = "en", mode = "gra
     });
     const data = finishedRef.current; finishedRef.current = null;
     if (!data || data.poseSeq.length < 8) { setErr("I couldn't see your upper body — step back so your head, shoulders and hands are all in frame."); setPhase("error"); return; }
+    if (mode === "capture") {
+      onCaptured?.({ pose: data.poseSeq, hand_l: data.hlSeq, hand_r: data.hrSeq });
+      setPhase("ready");
+      return;
+    }
     setPhase("scoring");
     const off_track = data.total ? data.offFrames / data.total : 1;
     if (mode === "challenge") {
@@ -290,7 +298,7 @@ export default function SignEvaluator({ api, gloss, language = "en", mode = "gra
         body: JSON.stringify({ gloss, scores: res.scores, corrections: data.corrections, language }) })
         .then((x) => x.json()).then((j) => setReview(j.review || "")).catch(() => {});
     } catch (e: any) { setErr(e?.message || String(e)); setPhase("error"); }
-  }, [api, gloss, language, mode, candidates, onScored, onRecognized, onEnrolled]);
+  }, [api, gloss, language, mode, candidates, onScored, onRecognized, onEnrolled, onCaptured]);
 
   const band = (s: number) => (s >= 85 ? "var(--emerald,#1f9d69)" : s >= 65 ? "var(--gold)" : "var(--coral)");
   const mark = result ? Math.round(result.mark ?? result.overall) : 0;
@@ -388,7 +396,7 @@ export default function SignEvaluator({ api, gloss, language = "en", mode = "gra
           {phase === "recording" ? "Signing…"
             : phase === "scoring" ? (mode === "challenge" ? "Recognizing…" : mode === "teach" ? "Teaching…" : "Grading…")
             : (result || recog || enrolled) ? (mode === "teach" ? "Record another take" : "Try again")
-            : `${mode === "challenge" ? "Perform" : mode === "teach" ? "Record" : "Sign"} “${gloss}” — start (${WINDOW_MS / 1000}s)`}
+            : `${mode === "challenge" ? "Perform" : mode === "teach" || mode === "capture" ? "Record" : "Sign"} “${gloss}” — start (${WINDOW_MS / 1000}s)`}
         </button>
       </div>
     </div>
