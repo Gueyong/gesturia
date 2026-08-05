@@ -59,10 +59,10 @@ const toLocalDir = (d: number[], f: any) => unit([dot(d, f.x), dot(d, f.up), dot
 
 export type CapturedMotion = { pose: number[][][]; hand_l: number[][][]; hand_r: number[][][] };
 
-export default function SignEvaluator({ api, gloss, language = "en", mode = "grade", candidates, onScored, onRecognized, onEnrolled, onCaptured }:
+export default function SignEvaluator({ api, gloss, language = "en", mode = "grade", candidates, onScored, onRecognized, onEnrolled, onCaptured, onFrame }:
   { api: string; gloss: string; language?: string; mode?: "grade" | "challenge" | "teach" | "capture"; candidates?: string[];
     onScored?: (r: EvalResult) => void; onRecognized?: (r: RecogResult) => void; onEnrolled?: (r: EnrollResult) => void;
-    onCaptured?: (m: CapturedMotion) => void }) {
+    onCaptured?: (m: CapturedMotion) => void; onFrame?: (f: { pose: number[][]; hand_l: number[][]; hand_r: number[][] }) => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const handRef = useRef<any>(null);
@@ -73,6 +73,7 @@ export default function SignEvaluator({ api, gloss, language = "en", mode = "gra
   const sessRef = useRef<any>(null);
   const finishedRef = useRef<any>(null);   // the loop stashes the finished session here for record()
   const refTrack = useRef<{ location: number[][]; orientation: number[][] } | null>(null);
+  const onFrameRef = useRef(onFrame); onFrameRef.current = onFrame;   // live-mirror per-frame emit
 
   const [phase, setPhase] = useState<Phase>("loading");
   const [err, setErr] = useState("");
@@ -182,6 +183,10 @@ export default function SignEvaluator({ api, gloss, language = "en", mode = "gra
         draw(pr, hr);
         const bodyOK = bodyVisible(pr);
         if (bodyOK !== lastBody) { lastBody = bodyOK; setBodySeen(bodyOK); }
+        if (bodyOK && onFrameRef.current) {                 // stream frames for the live avatar mirror
+          const lf = readFrame(pr, hr);
+          if (lf) onFrameRef.current({ pose: lf.pose, hand_l: lf.hl, hand_r: lf.hr2 });
+        }
         const s = sessRef.current;
         if (s) {
           const now = performance.now();
