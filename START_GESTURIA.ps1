@@ -51,9 +51,11 @@ Start-Process -WindowStyle Hidden -WorkingDirectory "C:\gesturia-train\proj" `
   -RedirectStandardOutput "C:\gesturia-train\proj\reports\api8020.log" `
   -RedirectStandardError  "C:\gesturia-train\proj\reports\api8020.err.log"
 
-# 2) the web app (:3003)
-Start-Process -WindowStyle Hidden -WorkingDirectory "C:\Users\lenovo\Documents\gesturia\gesturia-app\apps\web-gesturia" `
-  -FilePath "cmd.exe" -ArgumentList "/c","npx next dev -p 3003" `
+# 2) the web app (:3003) — PRODUCTION build (fast + stable). Rebuilds if .next is missing, then serves it.
+#    (after changing app code, run `npx next build` in apps/web-gesturia to refresh, or delete .next to force it)
+$webDir = "C:\Users\lenovo\Documents\gesturia\gesturia-app\apps\web-gesturia"
+Start-Process -WindowStyle Hidden -WorkingDirectory $webDir `
+  -FilePath "cmd.exe" -ArgumentList "/c","if not exist .next\BUILD_ID (npx next build) && npx next start -p 3003" `
   -RedirectStandardOutput "C:\Users\lenovo\Documents\gesturia\gesturia-app\web_dev_3003.log" `
   -RedirectStandardError  "C:\Users\lenovo\Documents\gesturia\gesturia-app\web_dev_3003.err.log"
 
