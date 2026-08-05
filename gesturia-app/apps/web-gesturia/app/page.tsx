@@ -55,7 +55,7 @@ export default function Home() {
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "18px 20px 40px" }}>
 
         {/* ============ NAV ============ */}
-        <nav className="g-card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", marginBottom: 22 }}>
+        <nav className="g-card g-nav" style={{ padding: "12px 16px", marginBottom: 22 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div className="display" style={{ width: 44, height: 44, borderRadius: 14, background: "var(--ink)", color: "var(--gold)", display: "grid", placeItems: "center", fontWeight: 800, fontSize: 20 }}>G</div>
             <div>
@@ -63,10 +63,10 @@ export default function Home() {
               <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>A country of gestures</div>
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 18, fontSize: 14, color: "var(--ink-soft)" }}>
-            <a href="#products" style={{ color: "inherit", textDecoration: "none" }}>Products</a>
-            <a href="#family" style={{ color: "inherit", textDecoration: "none" }}>The family</a>
-            <a href="#mission" style={{ color: "inherit", textDecoration: "none" }}>Mission</a>
+          <div className="g-navlinks" style={{ fontSize: 14, color: "var(--ink-soft)" }}>
+            <a href="#products" className="g-hide-sm" style={{ color: "inherit", textDecoration: "none" }}>Products</a>
+            <a href="#tools" className="g-hide-sm" style={{ color: "inherit", textDecoration: "none" }}>Tools</a>
+            <a href="#mission" className="g-hide-sm" style={{ color: "inherit", textDecoration: "none" }}>Mission</a>
             <a href="/studio" className="g-pill g-coral" style={{ padding: ".6rem 1.1rem", textDecoration: "none" }}>
               Open Gestlingua <FontAwesomeIcon icon={faArrowRight} />
             </a>
@@ -75,7 +75,7 @@ export default function Home() {
         </nav>
 
         {/* ============ HERO ============ */}
-        <section style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 24, alignItems: "center", marginBottom: 30 }}>
+        <section className="g-hero" style={{ marginBottom: 30 }}>
           <div>
             <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
               <span className="g-chip"><span className="dot" />Live 3D interpreter</span>
@@ -97,7 +97,7 @@ export default function Home() {
                 <FontAwesomeIcon icon={faCirclePlay} /> Why we exist
               </a>
             </div>
-            <div style={{ display: "flex", gap: 22, marginTop: 26 }}>
+            <div style={{ display: "flex", gap: 22, marginTop: 26, flexWrap: "wrap" }}>
               {[[`${(vocab || 3600).toLocaleString("en-US")}+`, "3D signs", "var(--coral)"], ["300k+", "deaf Cameroonians we serve", "var(--emerald)"], ["5", "products, one AI", "var(--indigo)"]].map(([n, l, c]) => (
                 <div key={l as string}>
                   <div className="display" style={{ fontSize: 26, fontWeight: 800, color: c as string }}>{n}</div>
@@ -124,7 +124,7 @@ export default function Home() {
         <section id="products" style={{ marginBottom: 30 }}>
           <div className="g-label" style={{ marginBottom: 4 }}>One platform · one AI · one family</div>
           <h2 className="display" style={{ margin: "0 0 14px", fontSize: 28 }}>Five ways home</h2>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+          <div className="g-auto">
             {products.map((p) => (
               <a key={p.name} href={p.href} className="g-card" style={{ padding: 18, position: "relative", textDecoration: "none", color: "inherit", display: "block" }}>
                 {p.live && <span className="g-chip g-chip-used" style={{ position: "absolute", top: 14, right: 14, fontSize: ".7rem" }}><span className="dot" />live</span>}
@@ -138,11 +138,32 @@ export default function Home() {
           </div>
         </section>
 
+        {/* ============ TOOLS (entry points to the studio) ============ */}
+        <section id="tools" style={{ marginBottom: 30 }}>
+          <div className="g-label" style={{ marginBottom: 4 }}>Build &amp; practice</div>
+          <h2 className="display" style={{ margin: "0 0 14px", fontSize: 28 }}>Tools that grow Gesturia</h2>
+          <div className="g-auto">
+            {[
+              { icon: faHandsAslInterpreting, name: "Sign Judge", href: "/evaluate", tile: "tile-coral", text: "Grade your signing on four parameters, take the word-only challenge, or teach a new sign on camera." },
+              { icon: faPuzzlePiece, name: "Vocab Studio", href: "/vocab", tile: "tile-emerald", text: "Grow the 3D dictionary from a folder of videos or by live motion capture — and manage removed signs." },
+              { icon: faGraduationCap, name: "Live class", href: "/aula", tile: "tile-gold", text: "Speak and the interpreter signs in real time, with bilingual notes captured for the deaf student." },
+              { icon: faGamepad, name: "Learn & certify", href: "/learn", tile: "tile-indigo", text: "Bilingual courses with XP and hearts, ending in a publicly-verifiable Gestificate." },
+            ].map((t) => (
+              <a key={t.name} href={t.href} className="g-card" style={{ padding: 16, textDecoration: "none", color: "inherit", display: "block" }}>
+                <div className={`tile ${t.tile}`}><FontAwesomeIcon icon={t.icon} /></div>
+                <div className="display" style={{ fontWeight: 700, fontSize: 16, marginTop: 10 }}>{t.name}</div>
+                <p style={{ color: "var(--ink-soft)", fontSize: 13, lineHeight: 1.5, marginTop: 6, marginBottom: 0 }}>{t.text}</p>
+                <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 700, color: "var(--coral)" }}>Open →</div>
+              </a>
+            ))}
+          </div>
+        </section>
+
         {/* ============ THE FAMILY ============ */}
         <section id="family" style={{ marginBottom: 30 }}>
           <div className="g-label" style={{ marginBottom: 4 }}>Gest · Uria · Lea · Olo</div>
           <h2 className="display" style={{ margin: "0 0 14px", fontSize: 28 }}>One family. Every sign belongs to them.</h2>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+          <div className="g-auto">
             {family.map((f) => (
               <a key={f.name} href={f.home} className="g-card" style={{ padding: 18, borderTop: `4px solid ${f.color}`, textDecoration: "none", color: "inherit", display: "block" }}>
                 <div className="display" style={{ fontWeight: 800, fontSize: 20, color: f.color }}>{f.name}</div>
@@ -176,12 +197,12 @@ export default function Home() {
                 delivering deaf education at national scale.
               </p>
             </div>
-            <FontAwesomeIcon icon={faGlobe} style={{ fontSize: 84, color: "rgba(244,184,31,.25)" }} />
+            <FontAwesomeIcon icon={faGlobe} className="g-hide-sm" style={{ fontSize: 84, color: "rgba(244,184,31,.25)" }} />
           </div>
         </section>
 
         {/* ============ FOOTER ============ */}
-        <footer style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 4px", color: "var(--muted)", fontSize: 13 }}>
+        <footer className="g-nav" style={{ padding: "6px 4px", color: "var(--muted)", fontSize: 13 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div className="display" style={{ width: 26, height: 26, borderRadius: 8, background: "var(--ink)", color: "var(--gold)", display: "grid", placeItems: "center", fontWeight: 800, fontSize: 13 }}>G</div>
             Gesturia — a country of gestures. Every sign belongs somewhere.

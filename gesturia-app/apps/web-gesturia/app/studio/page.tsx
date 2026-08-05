@@ -470,7 +470,7 @@ export default function Studio() {
         </header>
 
         {/* ============ HERO ============ */}
-        <section className="g-card" style={{ padding: "22px 28px", marginBottom: 16, display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 20, alignItems: "center", background: "linear-gradient(180deg,#fff,#fbf6ea)" }}>
+        <section className="g-card g-split" style={{ padding: "22px 28px", marginBottom: 16, alignItems: "center", background: "linear-gradient(180deg,#fff,#fbf6ea)" }}>
           <div>
             <div className="g-label" style={{ marginBottom: 10 }}>The Healing Stream · Live Services</div>
             <h1 className="display" style={{ margin: 0, fontSize: 38, lineHeight: 1.03 }}>
@@ -530,7 +530,7 @@ export default function Studio() {
         </section>
 
         {/* ============ MAIN GRID ============ */}
-        <section style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 16 }}>
+        <section className="g-split">
 
           {/* ---- broadcast stage ---- */}
           <div className="g-card" style={{ padding: 16 }}>
@@ -721,7 +721,7 @@ export default function Studio() {
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <div className="g-split">
               <div className="g-card" style={{ padding: 16 }}>
                 <FontAwesomeIcon icon={faCircleNodes} style={{ color: "var(--indigo)" }} />
                 <div className="display" style={{ fontSize: 26, fontWeight: 700, marginTop: 8 }}>{vocab.toLocaleString("en-US")}</div>

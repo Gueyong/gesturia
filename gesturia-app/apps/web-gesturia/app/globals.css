@@ -186,3 +186,47 @@ body {
   background: var(--panel-2); border: 1px solid var(--line);
   animation: wordIn .25s ease-out both;
 }
+
+/* ============================================================
+   Responsive foundation (2026-07-14) — mobile guards + layout utilities
+   Pages use inline styles, so we expose CLASSES that carry the media
+   queries; swap an inline grid for one of these and it collapses on phones.
+   ============================================================ */
+html { -webkit-text-size-adjust: 100%; }
+body { overflow-x: hidden; }                       /* never allow sideways scroll on mobile */
+img, canvas, svg, video { max-width: 100%; }
+
+/* centered page shell */
+.g-page { max-width: 1200px; margin: 0 auto; padding: 18px 20px 40px; }
+
+/* auto-collapsing card grid — fills columns, wraps down to 1 on narrow screens */
+.g-auto { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
+.g-auto-sm { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+
+/* two-panel split (watch | do, composer | class) — stacks on mobile */
+.g-split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+
+/* hero: copy + visual — stacks on mobile */
+.g-hero { display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; align-items: center; }
+
+/* responsive nav / header rows that wrap instead of overflowing */
+.g-nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.g-navlinks { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+
+@media (max-width: 900px) {
+  .g-split { grid-template-columns: 1fr; }
+}
+@media (max-width: 860px) {
+  .g-hero { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .g-page { padding: 14px 14px 30px; }
+  .g-hide-sm { display: none !important; }
+  .g-navlinks { gap: 10px; width: 100%; }
+  h1.display { font-size: clamp(30px, 8.4vw, 52px) !important; }
+  h2.display { font-size: clamp(22px, 6vw, 30px) !important; }
+  .g-stack-sm { flex-direction: column !important; align-items: stretch !important; }
+  .g-stack-sm > * { width: 100%; }
+}
+.g-only-sm { display: none !important; }
+@media (max-width: 640px) { .g-only-sm { display: inline-flex !important; } }

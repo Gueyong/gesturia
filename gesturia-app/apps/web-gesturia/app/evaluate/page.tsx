@@ -77,7 +77,7 @@ export default function EvaluatePage() {
   return (
     <main style={{ minHeight: "100vh", background: "var(--panel-2,#F8F2E4)", padding: "22px 20px 40px" }}>
       <div style={{ maxWidth: 1040, margin: "0 auto" }}>
-        <header style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
+        <header style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
           <a href="/" className="display" style={{ width: 34, height: 34, borderRadius: 10, display: "grid", placeItems: "center",
             color: "#fff", fontWeight: 800, background: "linear-gradient(135deg,var(--coral,#E8553A),var(--gold,#F4B81F))", textDecoration: "none" }}>G</a>
           <div>
@@ -137,7 +137,7 @@ export default function EvaluatePage() {
 
         {/* watch + do */}
         {gloss && clip ? (
-          <section className="g-card" style={{ padding: 16, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <section className="g-card g-split" style={{ padding: 16 }}>
             <div>
               <div className="g-label" style={{ marginBottom: 8 }}>Watch · “{gloss}”</div>
               <div style={{ position: "relative", aspectRatio: "4 / 3", borderRadius: 16, overflow: "hidden", border: "1px solid var(--line,#E8DFC9)" }}>
@@ -165,7 +165,7 @@ export default function EvaluatePage() {
               <p style={{ marginTop: 12, fontSize: 14 }}>The recognition deck isn’t ready yet (evaluator offline or reference bank still building).</p>
             </section>
           ) : (
-            <section className="g-card" style={{ padding: 16, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <section className="g-card g-split" style={{ padding: 16 }}>
               <div>
                 <div className="g-label" style={{ marginBottom: 8 }}>Perform this sign — no demo</div>
                 <div style={{ aspectRatio: "4 / 3", borderRadius: 16, border: "1px dashed var(--line,#E8DFC9)", display: "grid", placeItems: "center", textAlign: "center", padding: 20, background: "var(--panel-2,#F8F2E4)" }}>
@@ -208,7 +208,7 @@ export default function EvaluatePage() {
               <span style={{ fontSize: 12.5, color: "var(--muted)" }}>vocabulary: <b style={{ color: "var(--ink-soft)" }}>{deck.length}</b> signs the evaluator knows</span>
             </div>
             {teachWord ? (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              <div className="g-split">
                 <div>
                   <div className="g-label" style={{ marginBottom: 8 }}>Teaching · “{teachWord.toLowerCase()}”</div>
                   <div style={{ aspectRatio: "4 / 3", borderRadius: 16, border: "1px dashed var(--line,#E8DFC9)", display: "grid", placeItems: "center", textAlign: "center", padding: 20, background: "var(--panel-2,#F8F2E4)" }}>

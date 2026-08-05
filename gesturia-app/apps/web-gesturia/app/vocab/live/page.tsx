@@ -104,7 +104,7 @@ export default function LiveCapture() {
 
         {/* step 2 — perform it to the camera */}
         {phase === "capture" && (
-          <section className="g-card" style={{ padding: 16, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <section className="g-card g-split" style={{ padding: 16 }}>
             <div>
               <div className="g-label" style={{ marginBottom: 8 }}>Perform this sign</div>
               <div style={{ aspectRatio: "4 / 3", borderRadius: 16, border: "1px dashed var(--line,#E8DFC9)", display: "grid", placeItems: "center", textAlign: "center", padding: 20, background: "var(--panel-2,#F8F2E4)" }}>

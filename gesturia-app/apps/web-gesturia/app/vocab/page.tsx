@@ -85,7 +85,7 @@ export default function VocabStudio() {
   return (
     <main style={{ minHeight: "100vh", background: "var(--panel-2,#F8F2E4)", padding: "22px 20px 48px" }}>
       <div style={{ maxWidth: 1080, margin: "0 auto" }}>
-        <header style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+        <header style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
           <a href="/" className="display" style={{ width: 34, height: 34, borderRadius: 10, display: "grid", placeItems: "center", color: "#fff", fontWeight: 800, background: "linear-gradient(135deg,var(--coral,#E8553A),var(--gold,#F4B81F))", textDecoration: "none" }}>G</a>
           <div>
             <div className="display" style={{ fontSize: 20, fontWeight: 800, lineHeight: 1 }}>Vocab Studio</div>
@@ -97,7 +97,7 @@ export default function VocabStudio() {
           <AuthButton />
         </header>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1.35fr 1fr", gap: 16, alignItems: "start" }}>
+        <div className="g-split">
           {/* ---- add from video ---- */}
           <section className="g-card" style={{ padding: 18 }}>
             <div className="g-label" style={{ marginBottom: 4 }}><FontAwesomeIcon icon={faFilm} /> Add signs from video</div>

@@ -51,7 +51,7 @@ export default function SmplxStudio() {
           Text → glosses → co-articulated SMPL-X body mesh (10,475-vertex human, real captured + lifted 3D signs). Drag to orbit.
         </p>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1.15fr", gap: 20 }}>
+        <div className="g-split" style={{ gap: 20 }}>
           {/* controls */}
           <div>
             <textarea value={text} onChange={(e) => setText(e.target.value)} rows={4}

@@ -12,6 +12,12 @@ export const metadata = {
   description: "Real-time speech and video translated into a 3D sign-language interpreter for broadcast.",
 };
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+};
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${grotesk.variable}`}>
