@@ -45,7 +45,7 @@ export default function LiveCapture() {
           vertsUrl: `${API}/v1/smplx/mesh/${m.token}/verts`, facesUrl: `${API}/v1/smplx/mesh/${m.token}/faces`,
           frames: m.frames, nverts: m.nverts, fps: m.fps }]);
       } catch { /* drop this window */ }
-    }, 250);
+    }, 160);   // round-trip is ~80ms, so a tight window keeps the mirror ~0.24s behind — feels live
     return () => { alive = false; clearInterval(iv); };
   }, [phase]);
 
