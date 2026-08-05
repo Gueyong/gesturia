@@ -16,6 +16,20 @@ const API = typeof window !== "undefined"
 
 type Phase = "name" | "capture" | "fitting" | "preview" | "committing" | "done" | "error";
 type Frame = { pose: number[][]; hand_l: number[][]; hand_r: number[][] };
+type Smooth = { pose: number[][] | null; hl: number[][] | null; hr: number[][] | null };
+
+const present = (h?: number[][]) => Array.isArray(h) && h.some((p) => p && (p[0] || p[1] || p[2]));
+
+/** hold + light EMA: a missing hand keeps its last pose (stays quiet); the body is smoothed to kill jitter. */
+function processOne(s: Smooth, f: { pose: number[][]; hand_l?: number[][]; hand_r?: number[][] }): Frame {
+  const a = 0.6;
+  const pose = s.pose && s.pose.length === f.pose.length
+    ? f.pose.map((p, i) => p.map((c, j) => s.pose![i][j] * (1 - a) + c * a)) : f.pose;
+  s.pose = pose;
+  if (present(f.hand_l)) s.hl = f.hand_l!;
+  if (present(f.hand_r)) s.hr = f.hand_r!;
+  return { pose, hand_l: (present(f.hand_l) ? f.hand_l! : s.hl) || f.hand_l || [], hand_r: (present(f.hand_r) ? f.hand_r! : s.hr) || f.hand_r || [] };
+}
 
 export default function LiveCapture() {
   const [gloss, setGloss] = useState("");
@@ -25,13 +39,15 @@ export default function LiveCapture() {
   const [mirror, setMirror] = useState<MeshClip[]>([]);            // live mirror queue
   const [err, setErr] = useState("");
   const bufRef = useRef<Frame[]>([]);
+  const smoothRef = useRef<{ pose: number[][] | null; hl: number[][] | null; hr: number[][] | null }>({ pose: null, hl: null, hr: null });
   const word = gloss.trim().toUpperCase();
 
-  const streamFrame = useCallback((f: Frame) => { bufRef.current.push(f); }, []);
+  const streamFrame = useCallback((f: Frame) => { bufRef.current.push(processOne(smoothRef.current, f)); }, []);
 
   // live mirror: every ~250ms retarget the buffered window on the server and enqueue the avatar clip
   useEffect(() => {
     if (phase !== "capture") { bufRef.current = []; return; }
+    smoothRef.current = { pose: null, hl: null, hr: null };   // fresh continuity each capture
     let alive = true;
     const iv = setInterval(async () => {
       const w = bufRef.current.splice(0, bufRef.current.length);
@@ -54,9 +70,16 @@ export default function LiveCapture() {
   const handleCaptured = useCallback(async (motion: CapturedMotion) => {
     setPhase("fitting"); setErr("");
     try {
+      // apply the same hold + smoothing to the stored sign (fresh continuity pass)
+      const st = { pose: null as number[][] | null, hl: null as number[][] | null, hr: null as number[][] | null };
+      const P: number[][][] = [], HL: number[][][] = [], HR: number[][][] = [];
+      for (let i = 0; i < motion.pose.length; i++) {
+        const g = processOne(st, { pose: motion.pose[i], hand_l: motion.hand_l?.[i], hand_r: motion.hand_r?.[i] });
+        P.push(g.pose); HL.push(g.hand_l); HR.push(g.hand_r);
+      }
       const m = await fetch(`${API}/v1/vocab/mirror`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pose: motion.pose, hand_l: motion.hand_l, hand_r: motion.hand_r, trim: true }),
+        body: JSON.stringify({ pose: P, hand_l: HL, hand_r: HR, trim: true }),
       }).then((r) => r.json());
       if (!m?.token || !m?.params) throw new Error("retarget failed");
       setParams(m.params);
