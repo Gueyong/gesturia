@@ -3,12 +3,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faVideo, faSpinner, faCheck, faRotateLeft, faArrowLeft, faPlus, faWandMagicSparkles } from "@fortawesome/free-solid-svg-icons";
 import MeshSigner, { type MeshClip } from "../../../components/MeshSigner";
-import SignEvaluator, { type CapturedMotion } from "../../../components/SignEvaluator";
+import SignEvaluator from "../../../components/SignEvaluator";
 import AuthButton from "../../../components/AuthButton";
 
-/** VOCAB STUDIO · Live capture — perform a sign to the camera; OUR interpreter mirrors you in real time
- *  (MediaPipe -> SMPL-X retarget on the server), the move-to-rest is auto-trimmed, and if it looks right you
- *  add it to the dictionary under its word. The model does the mocap — no gloves, no suit. */
+/** VOCAB STUDIO · Live capture — perform a sign to the camera and OUR interpreter mirrors your whole body,
+ *  hands and fingers live (MediaPipe → SMPL-X retarget). When you stop, the captured motion is retargeted,
+ *  auto-trimmed to the signing window, replayed on the avatar to confirm, and added to the dictionary — all
+ *  instantly (no upload, no waiting): the sign you saw going in IS the sign that's stored. */
 
 const API = typeof window !== "undefined"
   ? `http://${window.location.hostname === "localhost" ? "127.0.0.1" : window.location.hostname}:8020`
@@ -16,38 +17,44 @@ const API = typeof window !== "undefined"
 
 type Phase = "name" | "capture" | "fitting" | "preview" | "committing" | "done" | "error";
 type Frame = { pose: number[][]; hand_l: number[][]; hand_r: number[][] };
+type Motion = { pose: number[][][]; hand_l: number[][][]; hand_r: number[][][] };
 type Smooth = { pose: number[][] | null; hl: number[][] | null; hr: number[][] | null };
 
 const present = (h?: number[][]) => Array.isArray(h) && h.some((p) => p && (p[0] || p[1] || p[2]));
 
-/** hold + light EMA: a missing hand keeps its last pose (stays quiet); the body is smoothed to kill jitter. */
+/** hold + light EMA: a missing hand keeps its last pose (stays quiet, no haphazard jumping); body and the
+ *  hands (fingers/wrist) are smoothed frame-to-frame to kill jitter so the mirror looks clean. */
+const ema = (prev: number[][] | null, cur: number[][], a: number) =>
+  prev && prev.length === cur.length ? cur.map((p, i) => p.map((c, j) => prev[i][j] * (1 - a) + c * a)) : cur;
+
 function processOne(s: Smooth, f: { pose: number[][]; hand_l?: number[][]; hand_r?: number[][] }): Frame {
-  const a = 0.6;
-  const pose = s.pose && s.pose.length === f.pose.length
-    ? f.pose.map((p, i) => p.map((c, j) => s.pose![i][j] * (1 - a) + c * a)) : f.pose;
-  s.pose = pose;
-  if (present(f.hand_l)) s.hl = f.hand_l!;
-  if (present(f.hand_r)) s.hr = f.hand_r!;
-  return { pose, hand_l: (present(f.hand_l) ? f.hand_l! : s.hl) || f.hand_l || [], hand_r: (present(f.hand_r) ? f.hand_r! : s.hr) || f.hand_r || [] };
+  const pose = ema(s.pose, f.pose, 0.6); s.pose = pose;
+  if (present(f.hand_l)) s.hl = ema(s.hl, f.hand_l!, 0.6);   // smooth while visible; hold last when it drops out
+  if (present(f.hand_r)) s.hr = ema(s.hr, f.hand_r!, 0.6);
+  return { pose, hand_l: s.hl || f.hand_l || [], hand_r: s.hr || f.hand_r || [] };
 }
 
 export default function LiveCapture() {
   const [gloss, setGloss] = useState("");
   const [phase, setPhase] = useState<Phase>("name");
-  const [clip, setClip] = useState<MeshClip | null>(null);         // preview of the finished sign
-  const [params, setParams] = useState<number[][] | null>(null);   // retargeted (T,182) to commit
-  const [mirror, setMirror] = useState<MeshClip[]>([]);            // live mirror queue
+  const [clip, setClip] = useState<MeshClip | null>(null);         // preview of the finished (retargeted) sign
+  const [mirror, setMirror] = useState<MeshClip[]>([]);            // live full-body+hands mirror queue
   const [err, setErr] = useState("");
+  const [take, setTake] = useState(0);                            // bump to remount the camera on "record again"
   const bufRef = useRef<Frame[]>([]);
-  const smoothRef = useRef<{ pose: number[][] | null; hl: number[][] | null; hr: number[][] | null }>({ pose: null, hl: null, hr: null });
+  const smoothRef = useRef<Smooth>({ pose: null, hl: null, hr: null });
+  const paramsRef = useRef<number[][] | null>(null);             // retargeted (T,182) to store on commit
   const word = gloss.trim().toUpperCase();
+  const wordRef = useRef(word); wordRef.current = word;
 
-  const streamFrame = useCallback((f: Frame) => { bufRef.current.push(processOne(smoothRef.current, f)); }, []);
+  const streamFrame = useCallback((f: Frame) => {
+    bufRef.current.push(processOne(smoothRef.current, f));       // feed the live mirror window
+  }, []);
 
-  // live mirror: every ~250ms retarget the buffered window on the server and enqueue the avatar clip
+  // live mirror: every ~160ms retarget the buffered window (body + hands) on the server and enqueue the clip
   useEffect(() => {
     if (phase !== "capture") { bufRef.current = []; return; }
-    smoothRef.current = { pose: null, hl: null, hr: null };   // fresh continuity each capture
+    smoothRef.current = { pose: null, hl: null, hr: null };      // fresh continuity each capture
     let alive = true;
     const iv = setInterval(async () => {
       const w = bufRef.current.splice(0, bufRef.current.length);
@@ -67,42 +74,35 @@ export default function LiveCapture() {
 
   const advanceMirror = useCallback((url: string) => setMirror((q) => (q.length && q[0].vertsUrl === url ? q.slice(1) : q)), []);
 
-  const handleCaptured = useCallback(async (motion: CapturedMotion) => {
+  // finished performing -> retarget the WHOLE captured motion (trimmed to the signing window) and replay it
+  const finalize = useCallback(async (m: Motion) => {
     setPhase("fitting"); setErr("");
     try {
-      // apply the same hold + smoothing to the stored sign (fresh continuity pass)
-      const st = { pose: null as number[][] | null, hl: null as number[][] | null, hr: null as number[][] | null };
-      const P: number[][][] = [], HL: number[][][] = [], HR: number[][][] = [];
-      for (let i = 0; i < motion.pose.length; i++) {
-        const g = processOne(st, { pose: motion.pose[i], hand_l: motion.hand_l?.[i], hand_r: motion.hand_r?.[i] });
-        P.push(g.pose); HL.push(g.hand_l); HR.push(g.hand_r);
-      }
-      const m = await fetch(`${API}/v1/vocab/mirror`, {
+      const r = await fetch(`${API}/v1/vocab/mirror`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pose: P, hand_l: HL, hand_r: HR, trim: true }),
-      }).then((r) => r.json());
-      if (!m?.token || !m?.params) throw new Error("retarget failed");
-      setParams(m.params);
-      setClip({ vertsUrl: `${API}/v1/smplx/mesh/${m.token}/verts`, facesUrl: `${API}/v1/smplx/mesh/${m.token}/faces`,
-        frames: m.frames, nverts: m.nverts, fps: m.fps });
+        body: JSON.stringify({ pose: m.pose, hand_l: m.hand_l, hand_r: m.hand_r, trim: true }),
+      }).then((res) => res.json());
+      if (!r?.token || !r?.params) throw new Error("couldn't read the motion — step back so your hands are in frame and try again");
+      paramsRef.current = r.params;
+      setClip({ vertsUrl: `${API}/v1/smplx/mesh/${r.token}/verts`, facesUrl: `${API}/v1/smplx/mesh/${r.token}/faces`, frames: r.frames, nverts: r.nverts, fps: r.fps });
       setPhase("preview");
     } catch (e: any) { setErr(e?.message || String(e)); setPhase("error"); }
   }, []);
 
   const commit = useCallback(async () => {
-    if (!params) return;
+    if (!paramsRef.current) return;
     setPhase("committing");
     try {
-      const r = await fetch(`${API}/v1/vocab/commit-params`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ gloss: word, params }),
+      const res = await fetch(`${API}/v1/vocab/commit-params`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ gloss: word, params: paramsRef.current }),
       });
-      if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e?.detail || `add failed (${r.status})`); }
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.detail || `add failed (${res.status})`); }
       setPhase("done");
     } catch (e: any) { setErr(e?.message || String(e)); setPhase("error"); }
-  }, [params, word]);
+  }, [word]);
 
-  const redo = useCallback(() => { setClip(null); setParams(null); setMirror([]); setErr(""); setPhase("capture"); }, []);
-  const another = useCallback(() => { setGloss(""); setClip(null); setParams(null); setMirror([]); setErr(""); setPhase("name"); }, []);
+  const redo = useCallback(() => { setClip(null); setMirror([]); setErr(""); paramsRef.current = null; setTake((t) => t + 1); setPhase("capture"); }, []);
+  const another = useCallback(() => { setGloss(""); setClip(null); setMirror([]); setErr(""); paramsRef.current = null; setTake((t) => t + 1); setPhase("name"); }, []);
   const previewQ = useMemo(() => (clip ? [clip] : []), [clip]);
 
   return (
@@ -139,7 +139,7 @@ export default function LiveCapture() {
           <section className="g-card g-split" style={{ padding: 16 }}>
             <div>
               <div className="g-label" style={{ marginBottom: 8 }}>Perform “{word.toLowerCase()}”</div>
-              <SignEvaluator api={API} gloss={word} mode="capture" onFrame={streamFrame} onCaptured={handleCaptured} key={word} />
+              <SignEvaluator api={API} gloss={word} mode="capture" onFrame={streamFrame} onCaptured={finalize} key={`${word}-${take}`} />
               <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 8, lineHeight: 1.5 }}>
                 Stand back so your head, shoulders and both hands are in frame. The move to lower your hands at the end
                 is trimmed automatically.
@@ -151,7 +151,7 @@ export default function LiveCapture() {
                 <MeshSigner queue={mirror} loop={false} onFinished={advanceMirror} hint={false} />
                 {mirror.length === 0 && (
                   <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "#5b6b8c", fontSize: 13, textAlign: "center", padding: 20, pointerEvents: "none" }}>
-                    Move — the avatar mirrors you here in real time.
+                    Move — the avatar mirrors your body and hands here in real time.
                   </div>
                 )}
               </div>
@@ -162,7 +162,7 @@ export default function LiveCapture() {
         {(phase === "fitting" || phase === "committing") && (
           <section className="g-card" style={{ padding: 40, textAlign: "center", color: "var(--muted)" }}>
             <FontAwesomeIcon icon={faSpinner} spin style={{ fontSize: 28, color: "var(--coral)" }} />
-            <p style={{ marginTop: 14, fontSize: 15 }}>{phase === "fitting" ? "Cleaning up your sign…" : `Adding “${word.toLowerCase()}” to the dictionary…`}</p>
+            <p style={{ marginTop: 14, fontSize: 15 }}>{phase === "fitting" ? "Reading your sign…" : `Adding “${word.toLowerCase()}” to the dictionary…`}</p>
           </section>
         )}
 
