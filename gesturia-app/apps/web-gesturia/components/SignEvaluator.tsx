@@ -260,8 +260,9 @@ export default function SignEvaluator({ api, gloss, language = "en", mode = "gra
         const vision = await import("@mediapipe/tasks-vision");
         const fs = await vision.FilesetResolver.forVisionTasks(`${location.origin}/mediapipe/wasm`);
         const mkPose = async (delegate: "GPU" | "CPU") => {
-          // HEAVY = MediaPipe's most precise pose (best wrists/arms); graceful fallback down the ladder
-          for (const model of ["/mediapipe/pose_landmarker_heavy.task", "/mediapipe/pose_landmarker_full.task", "/mediapipe/pose_landmarker_lite.task"]) {
+          // FULL = best precision that still runs at mirror frame-rate (heavy stalls the RAF loop -> the
+          // avatar freezes); graceful fallback down the ladder
+          for (const model of ["/mediapipe/pose_landmarker_full.task", "/mediapipe/pose_landmarker_lite.task"]) {
             try {
               return await vision.PoseLandmarker.createFromOptions(fs, { baseOptions: { modelAssetPath: model, delegate }, runningMode: "VIDEO", numPoses: 1, minPoseDetectionConfidence: 0.3, minPosePresenceConfidence: 0.3, minTrackingConfidence: 0.3 });
             } catch { /* try the next */ }

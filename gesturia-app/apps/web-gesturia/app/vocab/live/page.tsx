@@ -83,7 +83,7 @@ export default function LiveCapture() {
     let alive = true;
     const iv = setInterval(async () => {
       const w = bufRef.current.splice(0, bufRef.current.length);
-      if (w.length < 3) return;
+      if (w.length < 2) return;                          // even a slow tracker keeps the mirror moving
       try {
         const m = await fetch(`${API}/v1/vocab/mirror`, {
           method: "POST", headers: { "Content-Type": "application/json" },

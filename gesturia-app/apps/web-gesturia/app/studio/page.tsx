@@ -24,6 +24,10 @@ type Mode = "mic" | "text" | "stream";
 type Chips = { used: string[]; missing: string[] };
 type Phrase = { text: string; at: number };
 
+/** captions behave like TV subtitles: only the TAIL of a long in-flight utterance is shown, so the
+ *  caption can never grow into a wall of text that covers the interpreter. */
+const tailOf = (s: string, max = 90) => (s.length <= max ? s : "… " + s.slice(-max).replace(/^\S*\s/, ""));
+
 /** The interpreter INSIDE the stage: fullscreen when he's the show; when a program plays he is a
  *  draggable, corner-resizable overlay — exactly like a broadcast interpreter box. */
 function StageInterpreter({ queue, loop, onFinished, overlay, live, onPopOut, paused, rate, restartNonce }: {
@@ -164,7 +168,7 @@ export default function Studio() {
   const [rate, setRate] = useState(1);
   const [restartNonce, setRestartNonce] = useState(0);
   const [clipLog, setClipLog] = useState<{ text: string; clip: MeshClip; at: number }[]>([]);
-  const RATES = [0.5, 0.75, 1, 1.25];
+  const RATES = [0.5, 0.75, 1, 1.25, 1.5, 1.75];   // broadcast pace: real interpreters sign FAST
 
   const stageRef = useRef<HTMLDivElement>(null);
   const chainRef = useRef<Promise<void>>(Promise.resolve());  // keeps chunk translations IN ORDER
@@ -485,7 +489,7 @@ export default function Studio() {
                 ? <span style={{ color: "var(--muted)" }}>Your words appear here live…</span>
                 : <>
                     {capWords.map((w, i) => <span key={capWords.length - i + "-" + w} className="cap-word">{w}</span>)}
-                    {speech.interim && <span className="cap-interim">{speech.interim}</span>}
+                    {speech.interim && <span className="cap-interim">{tailOf(speech.interim)}</span>}
                   </>}
             </div>
           </div>
@@ -601,7 +605,7 @@ export default function Studio() {
               {(capWords.length > 0 || speech.interim) && (
                 <div className="stage-caption" style={{ zIndex: 3 }}>
                   {capWords.slice(-9).map((w, i) => <span key={i + "-" + w} className="cap-word">{w}</span>)}
-                  {speech.interim && <span className="cap-interim">{speech.interim}</span>}
+                  {speech.interim && <span className="cap-interim">{tailOf(speech.interim)}</span>}
                 </div>
               )}
             </div>

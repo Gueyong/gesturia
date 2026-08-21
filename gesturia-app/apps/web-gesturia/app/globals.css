@@ -148,10 +148,11 @@ body {
    Realtime captions + phrase history (2026-07-04)
    ============================================================ */
 .capbar {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
-  min-height: 44px; padding: 10px 14px; border-radius: 14px;
+  display: flex; flex-wrap: wrap; align-items: center; align-content: flex-end; gap: 6px;
+  min-height: 44px; max-height: 74px; overflow: hidden; padding: 10px 14px; border-radius: 14px;
   background: var(--panel-2); border: 1px solid var(--line);
   font-size: 15px; line-height: 1.4;
+  /* hard bound: like TV subtitles, the newest words stay visible and the strip NEVER grows into a wall */
 }
 .cap-word {
   animation: wordIn .22s ease-out both;
@@ -169,11 +170,13 @@ body {
   0%, 100% { opacity: .85; } 50% { opacity: .5; }
 }
 
-/* broadcast lower-third caption inside the stage */
+/* broadcast lower-third caption inside the stage — bounded like real TV subtitles: at most ~2 lines,
+   newest words win, the interpreter is NEVER covered */
 .stage-caption {
   position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
-  max-width: 86%; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px;
-  padding: 8px 16px; border-radius: 999px;
+  max-width: 86%; max-height: 66px; overflow: hidden;
+  display: flex; flex-wrap: wrap; justify-content: center; align-content: flex-end; gap: 6px;
+  padding: 8px 16px; border-radius: 18px;
   background: rgba(10, 14, 26, .62); backdrop-filter: blur(8px);
   border: 1px solid rgba(255,255,255,.12);
   font-size: 14.5px; color: #fff;

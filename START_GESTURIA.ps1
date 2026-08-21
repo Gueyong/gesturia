@@ -33,6 +33,15 @@ if (Test-Path "$pgBin\pg_ctl.exe") {
   }
 }
 
+# 0.7) intelligence — Ollama serves Qwen 2.5 7B (typo fixing, ambiguity, synonym judgment).
+# The engine probes ports 11434 + 11500 automatically; we just make sure the server is up.
+$ollama = @("$env:LOCALAPPDATA\Programs\Ollama\ollama.exe", "C:\Program Files\Ollama\ollama.exe") |
+  Where-Object { Test-Path $_ } | Select-Object -First 1
+if ($ollama -and -not (Get-Process ollama -ErrorAction SilentlyContinue)) {
+  Write-Host "  starting Ollama (Qwen intelligence)..." -ForegroundColor Gray
+  Start-Process -WindowStyle Hidden -FilePath $ollama -ArgumentList "serve"
+}
+
 # 1) the engine (API :8020) — bound to the network so phones can join
 $env:PYTHONUNBUFFERED = "1"
 $env:LMS_DATABASE_URL = "postgresql+psycopg2://gesturia:gesturia_dev_secret@127.0.0.1:5432/gesturia"
