@@ -34,6 +34,10 @@ const POSE_CONN = [[11, 12], [11, 13], [13, 15], [12, 14], [14, 16], [11, 23], [
 const POSE_PTS = [0, 11, 12, 13, 14, 15, 16, 23, 24];
 const HAND_CONN = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11],
   [11, 12], [9, 13], [13, 14], [14, 15], [15, 16], [13, 17], [0, 17], [17, 18], [18, 19], [19, 20]];
+const chain = (ids: number[]) => ids.slice(1).map((b, i) => [ids[i], b] as [number, number]);
+const FACE_LIPS = [...chain([61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291]),
+  ...chain([61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291])];
+const FACE_BROWS = [...chain([70, 63, 105, 66, 107]), ...chain([336, 296, 334, 293, 300])];
 
 type Phase = "loading" | "denied" | "ready" | "count" | "recording" | "scoring" | "result" | "error";
 
@@ -57,17 +61,24 @@ function bodyFrame(pose: number[][]) {
 const toLocal = (p: number[], f: any) => { const d = sub(p, f.origin); return [dot(d, f.x) / f.scale, dot(d, f.up) / f.scale, dot(d, f.z) / f.scale]; };
 const toLocalDir = (d: number[], f: any) => unit([dot(d, f.x), dot(d, f.up), dot(d, f.z)]);
 
-export type CapturedMotion = { pose: number[][][]; hand_l: number[][][]; hand_r: number[][][] };
+export type FaceFrame = { blend: Record<string, number>; head: number[] | null } | null;
+export type CapturedMotion = { pose: number[][][]; hand_l: number[][][]; hand_r: number[][][]; face: FaceFrame[]; ts: number[] };
+export type LiveFrame = { pose: number[][]; hand_l: number[][]; hand_r: number[][]; face: FaceFrame; ts: number };
 
-export default function SignEvaluator({ api, gloss, language = "en", mode = "grade", candidates, onScored, onRecognized, onEnrolled, onCaptured, onFrame }:
+// the blendshapes our retarget actually uses (jaw + smile + brows + pucker + frown) — tiny payload
+const BLEND_KEYS = ["jawOpen", "mouthSmileLeft", "mouthSmileRight", "mouthPucker", "mouthFunnel", "browInnerUp",
+  "browOuterUpLeft", "browOuterUpRight", "browDownLeft", "browDownRight", "mouthFrownLeft", "mouthFrownRight"];
+
+export default function SignEvaluator({ api, gloss, language = "en", mode = "grade", candidates, onScored, onRecognized, onEnrolled, onCaptured, onFrame, onStream }:
   { api: string; gloss: string; language?: string; mode?: "grade" | "challenge" | "teach" | "capture"; candidates?: string[];
     onScored?: (r: EvalResult) => void; onRecognized?: (r: RecogResult) => void; onEnrolled?: (r: EnrollResult) => void;
-    onCaptured?: (m: CapturedMotion) => void; onFrame?: (f: { pose: number[][]; hand_l: number[][]; hand_r: number[][] }) => void }) {
+    onCaptured?: (m: CapturedMotion) => void; onFrame?: (f: LiveFrame) => void; onStream?: (s: MediaStream) => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const handRef = useRef<any>(null);
   const poseRef = useRef<any>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const faceRef = useRef<any>(null);       // FaceLandmarker: blendshapes + head matrix (the avatar's face)
   const rafRef = useRef<number | null>(null);
   const runningRef = useRef(false);
   const sessRef = useRef<any>(null);
@@ -86,8 +97,8 @@ export default function SignEvaluator({ api, gloss, language = "en", mode = "gra
   const [bodySeen, setBodySeen] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
 
-  // ── draw the tracked skeleton so the user can SEE body + hands are tracked ──
-  const draw = (pr: any, hr: any) => {
+  // ── draw the tracked skeleton so the user can SEE body + hands + face are tracked ──
+  const draw = (pr: any, hr: any, fr?: any) => {
     const c = canvasRef.current; if (!c) return;
     const ctx = c.getContext("2d"); if (!ctx) return;
     const W = c.width, H = c.height; ctx.clearRect(0, 0, W, H);
@@ -97,6 +108,13 @@ export default function SignEvaluator({ api, gloss, language = "en", mode = "gra
       for (const [a, b] of POSE_CONN) if (P[a] && P[b]) { ctx.beginPath(); ctx.moveTo(P[a].x * W, P[a].y * H); ctx.lineTo(P[b].x * W, P[b].y * H); ctx.stroke(); }
       ctx.fillStyle = "#F4B81F";
       for (const i of POSE_PTS) if (P[i]) { ctx.beginPath(); ctx.arc(P[i].x * W, P[i].y * H, 4, 0, 6.29); ctx.fill(); }
+    }
+    const F = fr?.faceLandmarks?.[0];
+    if (F) {                                             // light face trace: lips + brows (the signed grammar)
+      ctx.strokeStyle = "rgba(62,142,90,.75)"; ctx.lineWidth = 1.5;
+      for (const conns of [FACE_LIPS, FACE_BROWS]) {
+        for (const [a, b] of conns) if (F[a] && F[b]) { ctx.beginPath(); ctx.moveTo(F[a].x * W, F[a].y * H); ctx.lineTo(F[b].x * W, F[b].y * H); ctx.stroke(); }
+      }
     }
     ctx.strokeStyle = "rgba(232,85,58,.92)"; ctx.lineWidth = 2.5; ctx.fillStyle = "#E8553A";
     for (const hand of (hr?.landmarks || [])) {
@@ -111,7 +129,7 @@ export default function SignEvaluator({ api, gloss, language = "en", mode = "gra
     return vis(11) > 0.5 && vis(12) > 0.5 && vis(0) > 0.4;   // both shoulders + head
   };
 
-  const readFrame = (pr: any, hr: any) => {
+  const readFrame = (pr: any, hr: any, fr?: any) => {
     const pw = pr?.worldLandmarks?.[0]; const pImg = pr?.landmarks?.[0];
     if (!pw || !pImg) return null;
     const pose = pw.map((p: any) => [p.x, p.y, p.z]);
@@ -125,7 +143,17 @@ export default function SignEvaluator({ api, gloss, language = "en", mode = "gra
       const pts = hands[i].map((p: any) => [p.x, p.y, p.z]);
       if (dL <= dR) hl.splice(0, 21, ...pts); else hr2.splice(0, 21, ...pts);
     }
-    return { pose, hl, hr2 };
+    // face: the used blendshapes + the head rotation (proto matrix is COLUMN-major -> transpose to rows)
+    let face: FaceFrame = null;
+    const cats = fr?.faceBlendshapes?.[0]?.categories;
+    if (cats) {
+      const blend: Record<string, number> = {};
+      for (const c of cats) if (BLEND_KEYS.includes(c.categoryName)) blend[c.categoryName] = Math.round(c.score * 1000) / 1000;
+      const d = fr?.facialTransformationMatrixes?.[0]?.data;
+      const head = d && d.length === 16 ? [d[0], d[4], d[8], d[1], d[5], d[9], d[2], d[6], d[10]] : null;
+      face = { blend, head };
+    }
+    return { pose, hl, hr2, face };
   };
 
   const localPose = (pose: number[][], hl: number[][], hr: number[][]) => {
@@ -178,14 +206,15 @@ export default function SignEvaluator({ api, gloss, language = "en", mode = "gra
       const v = videoRef.current, P = poseRef.current, H = handRef.current;
       if (v && v.readyState >= 2 && P && H) {
         const ts = Math.round(performance.now());
-        let pr: any, hr: any;
+        let pr: any, hr: any, fres: any;
         try { pr = P.detectForVideo(v, ts); hr = H.detectForVideo(v, ts); } catch { /* skip */ }
-        draw(pr, hr);
+        try { fres = faceRef.current?.detectForVideo(v, ts); } catch { /* face optional */ }
+        draw(pr, hr, fres);
         const bodyOK = bodyVisible(pr);
         if (bodyOK !== lastBody) { lastBody = bodyOK; setBodySeen(bodyOK); }
         if (bodyOK && onFrameRef.current) {                 // stream frames for the live avatar mirror
-          const lf = readFrame(pr, hr);
-          if (lf) onFrameRef.current({ pose: lf.pose, hand_l: lf.hl, hand_r: lf.hr2 });
+          const lf = readFrame(pr, hr, fres);
+          if (lf) onFrameRef.current({ pose: lf.pose, hand_l: lf.hl, hand_r: lf.hr2, face: lf.face, ts });
         }
         const s = sessRef.current;
         if (s) {
@@ -194,9 +223,10 @@ export default function SignEvaluator({ api, gloss, language = "en", mode = "gra
             s.badRun++;
             if (lastMsg !== "frame") { lastMsg = "frame"; setHint({ msg: "Step back — I need to see your head & shoulders", ok: false }); }
           } else {
-            const fr = readFrame(pr, hr);
+            const fr = readFrame(pr, hr, fres);
             if (fr) {
               s.poseSeq.push(fr.pose); s.hlSeq.push(fr.hl); s.hrSeq.push(fr.hr2);
+              s.faceSeq.push(fr.face); s.tsSeq.push(now);
               const { wri, palm } = localPose(fr.pose, fr.hl, fr.hr2);
               const msg = coachHint(wri, palm);
               s.total++;
@@ -222,16 +252,37 @@ export default function SignEvaluator({ api, gloss, language = "en", mode = "gra
       try {
         const vision = await import("@mediapipe/tasks-vision");
         const fs = await vision.FilesetResolver.forVisionTasks(`${location.origin}/mediapipe/wasm`);
+        const mkPose = async (delegate: "GPU" | "CPU") => {
+          // FULL model = markedly better wrists/arms than lite; fall back if the asset isn't served
+          for (const model of ["/mediapipe/pose_landmarker_full.task", "/mediapipe/pose_landmarker_lite.task"]) {
+            try {
+              return await vision.PoseLandmarker.createFromOptions(fs, { baseOptions: { modelAssetPath: model, delegate }, runningMode: "VIDEO", numPoses: 1, minPoseDetectionConfidence: 0.3, minPosePresenceConfidence: 0.3, minTrackingConfidence: 0.3 });
+            } catch { /* try the next */ }
+          }
+          throw new Error("pose model failed to load");
+        };
         const mk = async (delegate: "GPU" | "CPU") => ({
           hand: await vision.HandLandmarker.createFromOptions(fs, { baseOptions: { modelAssetPath: "/mediapipe/hand_landmarker.task", delegate }, runningMode: "VIDEO", numHands: 2, minHandDetectionConfidence: 0.4, minTrackingConfidence: 0.4 }),
-          pose: await vision.PoseLandmarker.createFromOptions(fs, { baseOptions: { modelAssetPath: "/mediapipe/pose_landmarker_lite.task", delegate }, runningMode: "VIDEO", numPoses: 1, minPoseDetectionConfidence: 0.3, minPosePresenceConfidence: 0.3, minTrackingConfidence: 0.3 }),
+          pose: await mkPose(delegate),
         });
         let m; try { m = await mk("GPU"); } catch { m = await mk("CPU"); }
+        try {   // face is additive: capture works without it, signs just keep a neutral face
+          faceRef.current = await vision.FaceLandmarker.createFromOptions(fs, {
+            baseOptions: { modelAssetPath: "/mediapipe/face_landmarker.task", delegate: "GPU" }, runningMode: "VIDEO",
+            numFaces: 1, outputFaceBlendshapes: true, outputFacialTransformationMatrixes: true });
+        } catch {
+          try {
+            faceRef.current = await vision.FaceLandmarker.createFromOptions(fs, {
+              baseOptions: { modelAssetPath: "/mediapipe/face_landmarker.task", delegate: "CPU" }, runningMode: "VIDEO",
+              numFaces: 1, outputFaceBlendshapes: true, outputFacialTransformationMatrixes: true });
+          } catch { faceRef.current = null; }
+        }
         if (!alive) return;
         handRef.current = m.hand; poseRef.current = m.pose;
         const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: "user" }, audio: false });
         if (!alive) { stream.getTracks().forEach((t) => t.stop()); return; }
         streamRef.current = stream;
+        onStream?.(stream);                              // page can record the raw webcam for the studio lift
         const v = videoRef.current!; v.srcObject = stream; await v.play().catch(() => {});
         setPhase("ready"); startLoop();
       } catch (e: any) {
@@ -240,7 +291,7 @@ export default function SignEvaluator({ api, gloss, language = "en", mode = "gra
         else { setErr(e?.message || String(e)); setPhase("error"); }
       }
     })();
-    return () => { alive = false; runningRef.current = false; if (rafRef.current) cancelAnimationFrame(rafRef.current); streamRef.current?.getTracks().forEach((t) => t.stop()); try { handRef.current?.close?.(); poseRef.current?.close?.(); } catch {} };
+    return () => { alive = false; runningRef.current = false; if (rafRef.current) cancelAnimationFrame(rafRef.current); streamRef.current?.getTracks().forEach((t) => t.stop()); try { handRef.current?.close?.(); poseRef.current?.close?.(); faceRef.current?.close?.(); } catch {} };
   }, [startLoop]);
 
   useEffect(() => {
@@ -256,12 +307,12 @@ export default function SignEvaluator({ api, gloss, language = "en", mode = "gra
     for (let c = 3; c >= 1; c--) { setCountdown(c); setPhase("count"); await new Promise((r) => setTimeout(r, 700)); }
     setCountdown(0); setPhase("recording");
     await new Promise<void>((resolve) => {
-      sessRef.current = { poseSeq: [], hlSeq: [], hrSeq: [], total: 0, offFrames: 0, offRun: 0, onRun: 0, counted: false, corrections: 0, badRun: 0, start: performance.now(), resolve };
+      sessRef.current = { poseSeq: [], hlSeq: [], hrSeq: [], faceSeq: [], tsSeq: [], total: 0, offFrames: 0, offRun: 0, onRun: 0, counted: false, corrections: 0, badRun: 0, start: performance.now(), resolve };
     });
     const data = finishedRef.current; finishedRef.current = null;
     if (!data || data.poseSeq.length < 8) { setErr("I couldn't see your upper body — step back so your head, shoulders and hands are all in frame."); setPhase("error"); return; }
     if (mode === "capture") {
-      onCaptured?.({ pose: data.poseSeq, hand_l: data.hlSeq, hand_r: data.hrSeq });
+      onCaptured?.({ pose: data.poseSeq, hand_l: data.hlSeq, hand_r: data.hrSeq, face: data.faceSeq, ts: data.tsSeq });
       setPhase("ready");
       return;
     }
