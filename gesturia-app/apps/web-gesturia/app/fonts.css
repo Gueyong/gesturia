@@ -1,0 +1,23 @@
+/* Self-hosted fonts — NO network at build or run time (a Gesturia demo must never depend on a link).
+   If the woff2 files exist in /public/fonts they are used; otherwise the system stacks below render —
+   the app always builds and always looks right. Fetch script: scripts/fetch-fonts (background). */
+
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/inter-latin.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Space Grotesk";
+  src: url("/fonts/space-grotesk-latin.woff2") format("woff2");
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Space Grotesk", "Inter", "Segoe UI", system-ui, sans-serif;
+}

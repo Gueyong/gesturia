@@ -136,12 +136,19 @@ export default function SignEvaluator({ api, gloss, language = "en", mode = "gra
     const zeros = () => Array.from({ length: 21 }, () => [0, 0, 0]);
     const hl = zeros(), hr2 = zeros();
     const hands = hr?.worldLandmarks || []; const handsImg = hr?.landmarks || [];
-    for (let i = 0; i < hands.length; i++) {
-      const wImg = handsImg[i]?.[0]; if (!wImg) continue;
-      const dL = Math.hypot(wImg.x - pImg[15].x, wImg.y - pImg[15].y);
-      const dR = Math.hypot(wImg.x - pImg[16].x, wImg.y - pImg[16].y);
+    const dW = (i: number, wrIdx: number) => {
+      const w = handsImg[i]?.[0]; return w ? Math.hypot(w.x - pImg[wrIdx].x, w.y - pImg[wrIdx].y) : 9;
+    };
+    const put = (i: number, left: boolean) => {
       const pts = hands[i].map((p: any) => [p.x, p.y, p.z]);
-      if (dL <= dR) hl.splice(0, 21, ...pts); else hr2.splice(0, 21, ...pts);
+      (left ? hl : hr2).splice(0, 21, ...pts);
+    };
+    if (hands.length === 1) put(0, dW(0, 15) <= dW(0, 16));
+    else if (hands.length >= 2) {
+      // JOINT assignment (not independent nearest-wrist): when the hands cross or touch, independent
+      // matching can grab the same wrist twice and swap L/R — the exact "hands tangled" bug.
+      const direct = dW(0, 15) + dW(1, 16), crossed = dW(0, 16) + dW(1, 15);
+      put(0, direct <= crossed); put(1, direct > crossed);
     }
     // face: the used blendshapes + the head rotation (proto matrix is COLUMN-major -> transpose to rows)
     let face: FaceFrame = null;
@@ -253,8 +260,8 @@ export default function SignEvaluator({ api, gloss, language = "en", mode = "gra
         const vision = await import("@mediapipe/tasks-vision");
         const fs = await vision.FilesetResolver.forVisionTasks(`${location.origin}/mediapipe/wasm`);
         const mkPose = async (delegate: "GPU" | "CPU") => {
-          // FULL model = markedly better wrists/arms than lite; fall back if the asset isn't served
-          for (const model of ["/mediapipe/pose_landmarker_full.task", "/mediapipe/pose_landmarker_lite.task"]) {
+          // HEAVY = MediaPipe's most precise pose (best wrists/arms); graceful fallback down the ladder
+          for (const model of ["/mediapipe/pose_landmarker_heavy.task", "/mediapipe/pose_landmarker_full.task", "/mediapipe/pose_landmarker_lite.task"]) {
             try {
               return await vision.PoseLandmarker.createFromOptions(fs, { baseOptions: { modelAssetPath: model, delegate }, runningMode: "VIDEO", numPoses: 1, minPoseDetectionConfidence: 0.3, minPosePresenceConfidence: 0.3, minTrackingConfidence: 0.3 });
             } catch { /* try the next */ }
