@@ -307,6 +307,10 @@ export default function Studio() {
               setSignsCount((n) => n + (ev.mesh.used?.length || 0));
               const clip: MeshClip = { vertsUrl: `${API}/v1/smplx/mesh/${ev.mesh.token}/verts`,
                 facesUrl: `${API}/v1/smplx/mesh/${ev.mesh.token}/faces`, frames: ev.mesh.frames, nverts: ev.mesh.nverts, fps: ev.mesh.fps };
+              if (ev.mesh.spans?.length) {               // karaoke follows the Auto-mic clips too
+                spansByUrl.current.set(clip.vertsUrl, ev.mesh.spans);
+                if (spansByUrl.current.size > 24) spansByUrl.current.delete(spansByUrl.current.keys().next().value!);
+              }
               setMclips((q) => [...q, clip]);
               setClipLog((l) => [{ text: ev.text, clip, at: Date.now() + ev.seq }, ...l].slice(0, 24));
             }
@@ -418,6 +422,10 @@ export default function Studio() {
               facesUrl: `${API}/v1/smplx/mesh/${ev.mesh.token}/faces`,
               frames: ev.mesh.frames, nverts: ev.mesh.nverts, fps: ev.mesh.fps,
             };
+            if (ev.mesh.spans?.length) {                     // karaoke on URL-stream clips too
+              spansByUrl.current.set(clip.vertsUrl, ev.mesh.spans);
+              if (spansByUrl.current.size > 24) spansByUrl.current.delete(spansByUrl.current.keys().next().value!);
+            }
             setMclips((q) => [...q, clip]);
             setClipLog((l) => [{ text: ev.text, clip, at: Date.now() + ev.seq }, ...l].slice(0, 24));
           } else {
