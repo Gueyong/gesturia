@@ -181,8 +181,14 @@ body {
   border: 1px solid rgba(255,255,255,.12);
   font-size: 14.5px; color: #fff;
 }
-.stage-caption .cap-word { color: #fff; }
+.stage-caption .cap-word { color: #fff; transition: color .18s ease, transform .18s ease, opacity .18s ease; }
 .stage-caption .cap-interim { color: #ffb4a1; }
+/* karaoke: the highlight FOLLOWS the sign — the word being signed glows gold, signed words dim */
+.stage-caption .cap-word.on {
+  color: var(--gold, #F4B81F); font-weight: 800; transform: scale(1.12);
+  text-shadow: 0 0 14px rgba(244, 184, 31, .55);
+}
+.stage-caption .cap-word.done { opacity: .45; }
 
 .phrase-row {
   padding: 7px 11px; border-radius: 11px;

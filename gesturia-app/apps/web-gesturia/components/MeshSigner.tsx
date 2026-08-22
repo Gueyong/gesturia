@@ -40,8 +40,9 @@ function loadStatics(clip: MeshClip) {
   return Promise.all([facesCache, colorsCache, inflateCache]);
 }
 
-function Mesh({ queue, loop, onFinished, paused = false, rate = 1, restartNonce = 0 }:
-  { queue: MeshClip[]; loop: boolean; onFinished?: (url: string) => void; paused?: boolean; rate?: number; restartNonce?: number }) {
+function Mesh({ queue, loop, onFinished, paused = false, rate = 1, restartNonce = 0, onProgress }:
+  { queue: MeshClip[]; loop: boolean; onFinished?: (url: string) => void; paused?: boolean; rate?: number; restartNonce?: number;
+    onProgress?: (url: string, frame: number, fps: number) => void }) {
   const meshRef = useRef<THREE.Mesh>(null!);
   const t = useRef(0);
   const cur = useRef<Cur | null>(null);
@@ -50,10 +51,13 @@ function Mesh({ queue, loop, onFinished, paused = false, rate = 1, restartNonce 
   const advancedFor = useRef<string>("");
   const inflateRef = useRef<Float32Array | null>(null);
   const geoReady = useRef(false);
+  const lastProg = useRef(0);                           // throttle for onProgress (karaoke captions)
 
   const head = queue[0];
   const onFinishedRef = useRef(onFinished);
   onFinishedRef.current = onFinished;
+  const onProgressRef = useRef(onProgress);
+  onProgressRef.current = onProgress;
 
   useEffect(() => { t.current = 0; advancedFor.current = ""; }, [restartNonce]);   // ⟲ restart current clip
 
@@ -116,6 +120,11 @@ function Mesh({ queue, loop, onFinished, paused = false, rate = 1, restartNonce 
         fi = c.frames - 1;                              // hold the final pose while waiting for more speech
       }
     }
+    const nowMs = performance.now();                    // karaoke captions: report which frame is on screen
+    if (onProgressRef.current && nowMs - lastProg.current > 90) {
+      lastProg.current = nowMs;
+      onProgressRef.current(c.url, fi, c.fps);
+    }
     // Sub-frame INTERPOLATION: the clip runs at c.fps (often 15-30 after the server caps to <=220 frames)
     // but the display refreshes at 60-144Hz. Lerping between the two neighbouring frames makes the motion
     // glide like professional video instead of stepping frame-to-frame — the standard "in-betweening".
@@ -166,8 +175,9 @@ function Mesh({ queue, loop, onFinished, paused = false, rate = 1, restartNonce 
   );
 }
 
-export default function MeshSigner({ queue, loop = false, onFinished, hint = true, paused = false, rate = 1, restartNonce = 0 }:
-  { queue: MeshClip[]; loop?: boolean; onFinished?: (url: string) => void; hint?: boolean; paused?: boolean; rate?: number; restartNonce?: number }) {
+export default function MeshSigner({ queue, loop = false, onFinished, hint = true, paused = false, rate = 1, restartNonce = 0, onProgress }:
+  { queue: MeshClip[]; loop?: boolean; onFinished?: (url: string) => void; hint?: boolean; paused?: boolean; rate?: number; restartNonce?: number;
+    onProgress?: (url: string, frame: number, fps: number) => void }) {
   const [ever, setEver] = useState(false);
   const controlsRef = useRef<any>(null);
   useEffect(() => { if (queue.length) setEver(true); }, [queue.length]);
@@ -180,7 +190,7 @@ export default function MeshSigner({ queue, loop = false, onFinished, hint = tru
         <ambientLight intensity={0.4} />
         <directionalLight position={[2.5, 4, 4]} intensity={1.3} castShadow />
         <pointLight position={[-3, 1, 2]} intensity={0.5} color="#F4B81F" />
-        <Mesh queue={queue} loop={loop} onFinished={onFinished} paused={paused} rate={rate} restartNonce={restartNonce} />
+        <Mesh queue={queue} loop={loop} onFinished={onFinished} paused={paused} rate={rate} restartNonce={restartNonce} onProgress={onProgress} />
         {/* clamped orbit: you can peek around him but never lose him sideways; double-click resets */}
         <OrbitControls ref={controlsRef} enablePan={false} minDistance={1.6} maxDistance={8} target={[0, 0, 0]}
           minAzimuthAngle={-0.55} maxAzimuthAngle={0.55}

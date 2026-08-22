@@ -19,7 +19,8 @@ const AvatarPip = dynamic(() => import("../../components/AvatarPip"), { ssr: fal
 const API = typeof window !== "undefined" ? `http://${window.location.hostname === "localhost" ? "127.0.0.1" : window.location.hostname}:8020`
   : (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8020");
 
-type Meta = { token: string; frames: number; nverts: number; fps: number; used: string[]; missing: string[]; glosses: string[] };
+type Meta = { token: string; frames: number; nverts: number; fps: number; used: string[]; missing: string[]; glosses: string[];
+  spans?: [string, number, number][] };   // per-sign frame spans -> karaoke captions
 type Mode = "mic" | "text" | "stream";
 type Chips = { used: string[]; missing: string[] };
 type Phrase = { text: string; at: number };
@@ -27,12 +28,13 @@ type Phrase = { text: string; at: number };
 /** captions behave like TV subtitles: only the TAIL of a long in-flight utterance is shown, so the
  *  caption can never grow into a wall of text that covers the interpreter. */
 const tailOf = (s: string, max = 90) => (s.length <= max ? s : "… " + s.slice(-max).replace(/^\S*\s/, ""));
+const prettyGloss = (g: string) => g.replace(/_/g, " ").toLowerCase();
 
 /** The interpreter INSIDE the stage: fullscreen when he's the show; when a program plays he is a
  *  draggable, corner-resizable overlay — exactly like a broadcast interpreter box. */
-function StageInterpreter({ queue, loop, onFinished, overlay, live, onPopOut, paused, rate, restartNonce }: {
+function StageInterpreter({ queue, loop, onFinished, overlay, live, onPopOut, paused, rate, restartNonce, onProgress }: {
   queue: MeshClip[]; loop: boolean; onFinished: (u: string) => void; overlay: boolean; live: boolean; onPopOut: () => void;
-  paused?: boolean; rate?: number; restartNonce?: number;
+  paused?: boolean; rate?: number; restartNonce?: number; onProgress?: (url: string, frame: number, fps: number) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState<{ x: number; y: number; w: number } | null>(null);
@@ -59,7 +61,7 @@ function StageInterpreter({ queue, loop, onFinished, overlay, live, onPopOut, pa
   if (!overlay) {
     return (
       <div style={{ position: "absolute", inset: 0 }}>
-        <MeshSigner queue={queue} loop={loop} onFinished={onFinished} paused={paused} rate={rate} restartNonce={restartNonce} />
+        <MeshSigner queue={queue} loop={loop} onFinished={onFinished} paused={paused} rate={rate} restartNonce={restartNonce} onProgress={onProgress} />
         <button onClick={onPopOut} title="Pop the interpreter out"
           style={{ position: "absolute", top: 8, right: 8, zIndex: 3, ...stageBtn }}>
           <FontAwesomeIcon icon={faUpRightFromSquare} />
@@ -94,7 +96,7 @@ function StageInterpreter({ queue, loop, onFinished, overlay, live, onPopOut, pa
         borderRadius: 14, overflow: "hidden", cursor: "grab", touchAction: "none",
         border: `2px solid ${live ? "var(--coral)" : "rgba(255,255,255,.55)"}`, boxShadow: "0 10px 30px rgba(0,0,0,.45)" }}
     >
-      <MeshSigner queue={queue} loop={loop} onFinished={onFinished} paused={paused} rate={rate} restartNonce={restartNonce} />
+      <MeshSigner queue={queue} loop={loop} onFinished={onFinished} paused={paused} rate={rate} restartNonce={restartNonce} onProgress={onProgress} />
       <button data-norel onClick={onPopOut} title="Pop out of the stage"
         style={{ position: "absolute", top: 6, right: 6, zIndex: 3, ...stageBtn }}>
         <FontAwesomeIcon icon={faUpRightFromSquare} />
@@ -147,6 +149,19 @@ export default function Studio() {
   // realtime playback queue: clips play back-to-back with a crossfaded seam
   const [mclips, setMclips] = useState<MeshClip[]>([]);
   const [nowChips, setNowChips] = useState<Chips | null>(null);
+  // karaoke captions: the caption shows WHAT IS BEING SIGNED and the highlight follows the interpreter
+  const spansByUrl = useRef<Map<string, [string, number, number][]>>(new Map());
+  const [karaoke, setKaraoke] = useState<{ words: string[]; active: number } | null>(null);
+  const onSignProgress = useCallback((url: string, frame: number) => {
+    const spans = spansByUrl.current.get(url);
+    if (!spans?.length) { setKaraoke((k) => (k ? null : k)); return; }
+    let ai = spans.findIndex(([, s, e]) => frame >= s && frame < e);
+    if (ai === -1) ai = frame >= spans[spans.length - 1][2] ? spans.length - 1 : -1;
+    setKaraoke((k) => {
+      if (k && k.active === ai && k.words.length === spans.length && k.words[0] === prettyGloss(spans[0][0])) return k;
+      return { words: spans.map(([g]) => prettyGloss(g)), active: ai };
+    });
+  }, []);
   const [phrases, setPhrases] = useState<Phrase[]>([]);
   const [capWords, setCapWords] = useState<string[]>([]);   // committed caption words (realtime)
   const [busyN, setBusyN] = useState(0);
@@ -201,6 +216,10 @@ export default function Studio() {
           facesUrl: `${API}/v1/smplx/mesh/${m.token}/faces`,
           frames: m.frames, nverts: m.nverts, fps: m.fps,
         };
+        if (m.spans?.length) {                              // karaoke: remember which frames sign which word
+          spansByUrl.current.set(clip.vertsUrl, m.spans);
+          if (spansByUrl.current.size > 24) spansByUrl.current.delete(spansByUrl.current.keys().next().value!);
+        }
         setMclips((q) => [...q, clip]);
         setClipLog((l) => [{ text: c, clip, at: Date.now() }, ...l].slice(0, 24));
       } catch (e: any) {
@@ -330,6 +349,7 @@ export default function Studio() {
 
   // clip finished -> advance the queue
   const advance = useCallback(() => setMclips((q) => q.slice(1)), []);
+  useEffect(() => { if (mclips.length === 0) setKaraoke(null); }, [mclips.length]);   // no stale karaoke on idle
 
   // ---- live stream-in: start a server transcription session and poll its events ----
   const stopStream = useCallback((id?: string | null) => {
@@ -566,7 +586,7 @@ export default function Studio() {
               {pip === "stage" && (
                 <StageInterpreter queue={mclips} loop={loopIdle} onFinished={advance}
                   overlay={overlayMode} live={interpreting} onPopOut={() => setPip("float")}
-                  paused={paused} rate={rate} restartNonce={restartNonce} />
+                  paused={paused} rate={rate} restartNonce={restartNonce} onProgress={onSignProgress} />
               )}
               {pip !== "stage" && !overlayMode && (
                 <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "#7d8cb0", textAlign: "center", padding: 20 }}>
@@ -602,7 +622,14 @@ export default function Studio() {
                   {rate}×
                 </button>
               </div>
-              {(capWords.length > 0 || speech.interim) && (
+              {karaoke && mclips.length > 0 ? (
+                /* KARAOKE caption: the words being SIGNED, the highlight follows the interpreter word by word */
+                <div className="stage-caption" style={{ zIndex: 3 }}>
+                  {karaoke.words.map((w, i) => (
+                    <span key={i + "-" + w} className={"cap-word" + (i === karaoke.active ? " on" : i < karaoke.active ? " done" : "")}>{w}</span>
+                  ))}
+                </div>
+              ) : (capWords.length > 0 || speech.interim) && (
                 <div className="stage-caption" style={{ zIndex: 3 }}>
                   {capWords.slice(-9).map((w, i) => <span key={i + "-" + w} className="cap-word">{w}</span>)}
                   {speech.interim && <span className="cap-interim">{tailOf(speech.interim)}</span>}

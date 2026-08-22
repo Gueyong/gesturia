@@ -48,6 +48,8 @@ export default function LiveCapture() {
   const [busy, setBusy] = useState<string | null>(null);           // "quick" | "studio" while committing
   const [studioState, setStudioState] = useState("");
   const [err, setErr] = useState("");
+  const [engineDown, setEngineDown] = useState(false);             // mirror calls failing -> say it, loudly
+  const failsRef = useRef(0);
   const [take, setTake] = useState(0);
   const bufRef = useRef<ReturnType<typeof processOne>[]>([]);
   const smoothRef = useRef<Smooth>({ pose: null, hl: null, hr: null, face: null });
@@ -89,11 +91,16 @@ export default function LiveCapture() {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ pose: w.map((f) => f.pose), hand_l: w.map((f) => f.hand_l),
             hand_r: w.map((f) => f.hand_r), face: w.map((f) => f.face) }),
-        }).then((r) => r.json());
+        }).then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.json(); });
+        failsRef.current = 0;
+        if (alive) setEngineDown(false);
         if (alive && m?.token) setMirror((q) => [...q.slice(-2), {
           vertsUrl: `${API}/v1/smplx/mesh/${m.token}/verts`, facesUrl: `${API}/v1/smplx/mesh/${m.token}/faces`,
           frames: m.frames, nverts: m.nverts, fps: m.fps }]);
-      } catch { /* drop this window */ }
+      } catch {                                          // a silent static avatar is a MYSTERY; a banner isn't
+        failsRef.current += 1;
+        if (alive && failsRef.current >= 4) setEngineDown(true);
+      }
     }, 160);
     return () => { alive = false; clearInterval(iv); };
   }, [phase]);
@@ -225,9 +232,16 @@ export default function LiveCapture() {
               <div className="g-label" style={{ marginBottom: 8 }}>The interpreter follows you</div>
               <div style={{ position: "relative", aspectRatio: "3 / 4", borderRadius: 16, overflow: "hidden", border: "1px solid var(--line)" }}>
                 <MeshSigner queue={mirror} loop={false} onFinished={advanceMirror} hint={false} />
-                {mirror.length === 0 && (
+                {mirror.length === 0 && !engineDown && (
                   <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "#5b6b8c", fontSize: 13, textAlign: "center", padding: 20, pointerEvents: "none" }}>
                     Move — the avatar mirrors your body, hands and face here in real time.
+                  </div>
+                )}
+                {engineDown && (
+                  <div style={{ position: "absolute", left: 10, right: 10, top: 10, zIndex: 3, padding: "10px 14px",
+                    borderRadius: 12, background: "rgba(200,42,30,.92)", color: "#fff", fontSize: 13, textAlign: "center" }}>
+                    The engine isn't answering — the mirror can't follow you. Run START_GESTURIA.ps1 (or restart
+                    the API on :8020) and this banner will disappear by itself.
                   </div>
                 )}
               </div>
