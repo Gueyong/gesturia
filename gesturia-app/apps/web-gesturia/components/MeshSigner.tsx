@@ -105,7 +105,7 @@ function Mesh({ queue, loop, onFinished, paused = false, rate = 1, restartNonce 
     // illegibly and we NEVER drop queued signs; a growing backlog is surfaced to the UI (queue depth)
     // instead of being hidden. `rate` is the user's speed control; `paused` freezes time.
     const behind = Math.max(0, queue.length - 2);
-    const speed = rate * (1 + Math.min(0.5, 0.08 * behind));   // live catch-up: up to 1.5x on a deep speech
+    const speed = rate * (1 + Math.min(0.6, 0.09 * behind));   // live catch-up: up to 1.6x on a deep speech
                                                                // backlog — fast, but never illegible
     if (!paused) t.current += dt * c.fps * speed;
     let fi = Math.floor(t.current);

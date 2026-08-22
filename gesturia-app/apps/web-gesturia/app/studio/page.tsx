@@ -140,6 +140,7 @@ const MIC_LANGS: { code: string; short: string; label: string }[] = [
 export default function Studio() {
   const [mode, setMode] = useState<Mode>("mic");
   const [micLang, setMicLang] = useState("en-US");   // browser mic recognizes ONE language at a time
+  const micLangRef = useRef(micLang); micLangRef.current = micLang;
   const [text, setText] = useState("");
   const [srcUrl, setSrcUrl] = useState("");
   const [ytId, setYtId] = useState<string | null>(null);
@@ -198,8 +199,12 @@ export default function Studio() {
     chainRef.current = chainRef.current.then(async () => {
       setBusyN((n) => n + 1);
       try {
+        // the mic KNOWS its language — tell the translator so a short French chunk never has to
+        // gamble on auto-detection ("trois cent mille" must translate, not fingerspell)
+        const lang = micLangRef.current === "fr-FR" ? "fr" : micLangRef.current === "en-US" ? "en" : undefined;
         const r = await fetch(`${API}/v1/smplx/translate`, {
-          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: c, session: sessionRef.current }),
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: c, session: sessionRef.current, ...(lang ? { language: lang } : {}) }),
         });
         if (!r.ok) {
           const e = await r.json().catch(() => ({}));
