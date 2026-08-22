@@ -139,8 +139,11 @@ const MIC_LANGS: { code: string; short: string; label: string }[] = [
 
 export default function Studio() {
   const [mode, setMode] = useState<Mode>("mic");
-  const [micLang, setMicLang] = useState("en-US");   // browser mic recognizes ONE language at a time
+  // AUTO by default: onboard Whisper needs NO internet (browser EN/FR speech is a Google cloud service —
+  // offline it silently produces nothing; that must never decide a broadcast)
+  const [micLang, setMicLang] = useState("auto");
   const micLangRef = useRef(micLang); micLangRef.current = micLang;
+  const [micNote, setMicNote] = useState("");
   const [text, setText] = useState("");
   const [srcUrl, setSrcUrl] = useState("");
   const [ytId, setYtId] = useState<string | null>(null);
@@ -345,6 +348,17 @@ export default function Studio() {
     if (!micIsAuto && micAuto) stopMicAuto();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [micIsAuto]);
+
+  // LIFELINE: the browser recognizer hears you but produces nothing (no internet — it's a cloud service).
+  // Switch to Gesturia's ONBOARD recognition automatically and keep the broadcast alive.
+  useEffect(() => {
+    if (!speech.starving || micIsAuto) return;
+    setMicLang("auto");
+    setMicNote("No internet for browser speech — switched to Gesturia's onboard recognition.");
+    const t = setTimeout(() => startMicAuto(), 500);   // after the lang switch stops browser recognition
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [speech.starving]);
   useEffect(() => () => stopMicAuto(), [stopMicAuto]);   // cleanup on unmount
 
   const micActive = micIsAuto ? micAuto : listening;
@@ -689,7 +703,7 @@ export default function Studio() {
                       {micActive ? `● ${mmss}` : "00:00"}
                     </span>
                     <span style={{ color: "var(--ink-soft)", fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {micActive ? (micIsAuto ? "Live — auto-detecting language" : "Live — signing as you speak") : "Press start to interpret live"}
+                      {micNote || (micActive ? (micIsAuto ? "Live — onboard recognition (works without internet)" : "Live — signing as you speak") : "Press start to interpret live")}
                     </span>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>

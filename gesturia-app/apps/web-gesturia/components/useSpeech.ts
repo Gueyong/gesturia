@@ -15,6 +15,8 @@ export function useSpeech(onFinal: (text: string) => void, onWords?: (words: str
   const [interim, setInterim] = useState("");
   const [level, setLevel] = useState(0);
   const [supported, setSupported] = useState(true);
+  const [starving, setStarving] = useState(false);   // voice heard but the cloud recognizer yields NOTHING
+                                                     // (Web Speech needs internet) -> caller falls back
 
   const recRef = useRef<any>(null);
   const langRef = useRef(lang);            // Web Speech recognizes ONE language at a time (no auto-detect);
@@ -24,6 +26,9 @@ export function useSpeech(onFinal: (text: string) => void, onWords?: (words: str
   const rafRef = useRef<number | null>(null);
   const onFinalRef = useRef(onFinal);
   const onWordsRef = useRef(onWords);
+  const gotResultRef = useRef(false);      // any recognition output at all this session
+  const voicedMsRef = useRef(0);           // how long the meter has heard actual voice
+  const lastTickRef = useRef(0);
   onFinalRef.current = onFinal;
   onWordsRef.current = onWords;
 
@@ -39,6 +44,7 @@ export function useSpeech(onFinal: (text: string) => void, onWords?: (words: str
     rec.interimResults = true;
     rec.lang = langRef.current;             // set from the chosen language (updated live below)
     rec.onresult = (e: any) => {
+      gotResultRef.current = true;
       let live = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const r = e.results[i];
@@ -66,7 +72,10 @@ export function useSpeech(onFinal: (text: string) => void, onWords?: (words: str
       setInterim(live);
     };
     rec.onend = () => { if (wantRef.current) { try { rec.start(); } catch {} } else setListening(false); };
-    rec.onerror = (ev: any) => { if (ev.error === "not-allowed" || ev.error === "service-not-allowed") { wantRef.current = false; setListening(false); } };
+    rec.onerror = (ev: any) => {
+      if (ev.error === "not-allowed" || ev.error === "service-not-allowed") { wantRef.current = false; setListening(false); }
+      if (ev.error === "network") setStarving(true);   // browser speech is a CLOUD service — offline it dies
+    };
     recRef.current = rec;
     return () => { wantRef.current = false; try { rec.stop(); } catch {} };
   }, []);
@@ -103,6 +112,15 @@ export function useSpeech(onFinal: (text: string) => void, onWords?: (words: str
         for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
         const rms = Math.sqrt(sum / buf.length);
         setLevel((p) => p * 0.6 + Math.min(1, rms * 2.6) * 0.4); // smoothed
+        // starving detector: we HEAR the user (voice-level audio) but recognition has produced nothing —
+        // the cloud recognizer is unreachable. 2.5s of voiced audio with zero output = starving.
+        const now = performance.now();
+        const dt = lastTickRef.current ? now - lastTickRef.current : 0;
+        lastTickRef.current = now;
+        if (wantRef.current && rms > 0.055) {
+          voicedMsRef.current += dt;
+          if (!gotResultRef.current && voicedMsRef.current > 2500) setStarving(true);
+        }
         rafRef.current = requestAnimationFrame(tick);
       };
       tick();
@@ -122,6 +140,10 @@ export function useSpeech(onFinal: (text: string) => void, onWords?: (words: str
     wantRef.current = true;
     committedRef.current = {};
     prevWordsRef.current = {};
+    gotResultRef.current = false;
+    voicedMsRef.current = 0;
+    lastTickRef.current = 0;
+    setStarving(false);
     setListening(true);
     try { recRef.current.start(); } catch {}
     startMeter();
@@ -137,5 +159,5 @@ export function useSpeech(onFinal: (text: string) => void, onWords?: (words: str
 
   const toggle = useCallback(() => { (listening ? stop : start)(); }, [listening, start, stop]);
 
-  return { listening, interim, level, supported, start, stop, toggle };
+  return { listening, interim, level, supported, starving, start, stop, toggle };
 }
