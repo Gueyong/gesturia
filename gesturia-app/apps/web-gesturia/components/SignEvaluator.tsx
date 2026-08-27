@@ -78,6 +78,7 @@ export default function SignEvaluator({ api, gloss, language = "en", mode = "gra
   const handRef = useRef<any>(null);
   const poseRef = useRef<any>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const trackCanvasRef = useRef<HTMLCanvasElement | null>(null);   // downscaled copy for FAST tracking
   const faceRef = useRef<any>(null);       // FaceLandmarker: blendshapes + head matrix (the avatar's face)
   const rafRef = useRef<number | null>(null);
   const runningRef = useRef(false);
@@ -213,9 +214,15 @@ export default function SignEvaluator({ api, gloss, language = "en", mode = "gra
       const v = videoRef.current, P = poseRef.current, H = handRef.current;
       if (v && v.readyState >= 2 && P && H) {
         const ts = Math.round(performance.now());
+        // track on a 640-wide downscale: MediaPipe stays realtime while the RECORDING keeps full 1080p
+        let tc = trackCanvasRef.current;
+        if (!tc) { tc = document.createElement("canvas"); trackCanvasRef.current = tc; }
+        const tw = 640, th = Math.max(2, Math.round((v.videoHeight / Math.max(1, v.videoWidth)) * 640 / 2) * 2);
+        if (tc.width !== tw || tc.height !== th) { tc.width = tw; tc.height = th; }
+        tc.getContext("2d")!.drawImage(v, 0, 0, tw, th);
         let pr: any, hr: any, fres: any;
-        try { pr = P.detectForVideo(v, ts); hr = H.detectForVideo(v, ts); } catch { /* skip */ }
-        try { fres = faceRef.current?.detectForVideo(v, ts); } catch { /* face optional */ }
+        try { pr = P.detectForVideo(tc, ts); hr = H.detectForVideo(tc, ts); } catch { /* skip */ }
+        try { fres = faceRef.current?.detectForVideo(tc, ts); } catch { /* face optional */ }
         draw(pr, hr, fres);
         const bodyOK = bodyVisible(pr);
         if (bodyOK !== lastBody) { lastBody = bodyOK; setBodySeen(bodyOK); }
@@ -287,7 +294,11 @@ export default function SignEvaluator({ api, gloss, language = "en", mode = "gra
         }
         if (!alive) return;
         handRef.current = m.hand; poseRef.current = m.pose;
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: "user" }, audio: false });
+        // capture at the camera's BEST resolution — the recorded video feeds the WiLoR lift, and finger
+        // precision is decided by pixels-on-hand (a 480p webcam gives the hand ~50px; 1080p gives ~200px).
+        // Tracking still runs on a downscaled copy so the live mirror stays fast.
+        const stream = await navigator.mediaDevices.getUserMedia({ video: {
+          width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 }, facingMode: "user" }, audio: false });
         if (!alive) { stream.getTracks().forEach((t) => t.stop()); return; }
         streamRef.current = stream;
         onStream?.(stream);                              // page can record the raw webcam for the studio lift

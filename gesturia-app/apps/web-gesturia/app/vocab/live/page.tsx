@@ -65,11 +65,13 @@ export default function LiveCapture() {
     bufRef.current.push(processOne(smoothRef.current, f));
   }, []);
 
-  // record the raw webcam alongside — it feeds the optional studio-quality (WiLoR) lift
+  // record the raw webcam alongside — it feeds the optional studio-quality (WiLoR) lift.
+  // VP9 + a generous bitrate: finger precision downstream is decided by the pixels we keep HERE.
   const onStream = useCallback((stream: MediaStream) => {
     try {
-      const mime = MediaRecorder.isTypeSupported("video/webm;codecs=vp8") ? "video/webm;codecs=vp8" : "video/webm";
-      const rec = new MediaRecorder(stream, { mimeType: mime });
+      const mime = MediaRecorder.isTypeSupported("video/webm;codecs=vp9") ? "video/webm;codecs=vp9"
+        : MediaRecorder.isTypeSupported("video/webm;codecs=vp8") ? "video/webm;codecs=vp8" : "video/webm";
+      const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8_000_000 });
       chunksRef.current = [];
       rec.ondataavailable = (e) => { if (e.data && e.data.size) chunksRef.current.push(e.data); };
       recRef.current = rec;
