@@ -88,7 +88,8 @@ function Rig({ api, rig, queue, onFinished, onProgress, paused = false, rate = 1
     }
   });
 
-  return model ? <primitive ref={group} object={model} position={[0, -0.15, 0]} /> : null;
+  // NOTE: no position prop here — r3f would clobber the chest-origin shift computed at load
+  return model ? <primitive ref={group} object={model} /> : null;
 }
 
 export default function CharacterStage({ api, rig, queue, onFinished, onProgress, paused, rate = 1, hint = true }: {
