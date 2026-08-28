@@ -11,6 +11,7 @@ import {
 import { faYoutube } from "@fortawesome/free-brands-svg-icons";
 import { useSpeech } from "../../components/useSpeech";
 import MeshSigner, { type MeshClip } from "../../components/MeshSigner";
+import CharacterStage, { type CharClip } from "../../components/CharacterStage";
 
 const AvatarPip = dynamic(() => import("../../components/AvatarPip"), { ssr: false });
 // API reached on the same host that served this page — works on localhost AND from phones on the LAN
@@ -152,6 +153,10 @@ export default function Studio() {
 
   // realtime playback queue: clips play back-to-back with a crossfaded seam
   const [mclips, setMclips] = useState<MeshClip[]>([]);
+  // CHOOSE YOUR INTERPRETER: classic = our vertex-streamed avatar; a named rig = bake-on-demand character
+  const [interp, setInterp] = useState<"classic" | "moe">("classic");
+  const interpRef = useRef(interp); interpRef.current = interp;
+  const [cclips, setCclips] = useState<CharClip[]>([]);
   const [nowChips, setNowChips] = useState<Chips | null>(null);
   // karaoke captions: the caption shows WHAT IS BEING SIGNED and the highlight follows the interpreter
   const spansByUrl = useRef<Map<string, [string, number, number][]>>(new Map());
@@ -205,6 +210,24 @@ export default function Studio() {
         // the mic KNOWS its language — tell the translator so a short French chunk never has to
         // gamble on auto-detection ("trois cent mille" must translate, not fingerspell)
         const lang = micLangRef.current === "fr-FR" ? "fr" : micLangRef.current === "en-US" ? "en" : undefined;
+        if (interpRef.current !== "classic") {
+          // CHARACTER path: same pipeline server-side, baked onto the chosen rig as bone tracks
+          const cr = await fetch(`${API}/v1/character/sign`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: c, rig: interpRef.current, session: sessionRef.current, ...(lang ? { language: lang } : {}) }),
+          });
+          if (!cr.ok) { const e = await cr.json().catch(() => ({})); throw new Error(e?.detail?.message || e?.detail || `HTTP ${cr.status}`); }
+          const cm = await cr.json();
+          setNowChips({ used: cm.used, missing: cm.missing || [] });
+          setSignsCount((n) => n + (cm.used?.length || 0));
+          setErr(null);
+          if (cm.spans?.length) {
+            spansByUrl.current.set(cm.token, cm.spans);
+            if (spansByUrl.current.size > 24) spansByUrl.current.delete(spansByUrl.current.keys().next().value!);
+          }
+          setCclips((q) => [...q, { token: cm.token, frames: cm.frames, fps: cm.fps, tracks: cm.tracks }]);
+          return;
+        }
         const r = await fetch(`${API}/v1/smplx/translate`, {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text: c, session: sessionRef.current, ...(lang ? { language: lang } : {}) }),
@@ -372,7 +395,8 @@ export default function Studio() {
 
   // clip finished -> advance the queue
   const advance = useCallback(() => setMclips((q) => q.slice(1)), []);
-  useEffect(() => { if (mclips.length === 0) setKaraoke(null); }, [mclips.length]);   // no stale karaoke on idle
+  const advanceC = useCallback(() => setCclips((q) => q.slice(1)), []);
+  useEffect(() => { if (mclips.length === 0 && cclips.length === 0) setKaraoke(null); }, [mclips.length, cclips.length]);
 
   // ---- live stream-in: start a server transcription session and poll its events ----
   const stopStream = useCallback((id?: string | null) => {
@@ -486,7 +510,7 @@ export default function Studio() {
   }
   function clearSession() {
     wordBufRef.current = [];
-    setMclips([]); setNowChips(null); setPhrases([]); setCapWords([]); setErr(null);
+    setMclips([]); setCclips([]); setNowChips(null); setPhrases([]); setCapWords([]); setErr(null);
     sessionRef.current = "st" + Math.random().toString(36).slice(2, 10);   // fresh continuity on clear
   }
 
@@ -594,7 +618,20 @@ export default function Studio() {
                   </button>
                 ))}
               </div>
-              <div className="g-label">Broadcast stage</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {/* CHOOSE YOUR INTERPRETER — same dictionary, same intelligence, any body */}
+                <div style={{ display: "flex", gap: 4, background: "var(--panel-2)", padding: 3, borderRadius: 999, border: "1px solid var(--line)" }}
+                  title="Choose your interpreter — the same signs, performed by different characters">
+                  {([["classic", "Classic"], ["moe", "Moe"]] as const).map(([k, label]) => (
+                    <button key={k} onClick={() => setInterp(k)} className="g-pill"
+                      style={{ padding: ".3rem .7rem", fontSize: ".72rem", fontWeight: 700, boxShadow: "none",
+                        background: interp === k ? "var(--gold)" : "transparent", color: interp === k ? "#1C1A17" : "var(--ink-soft)" }}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="g-label">Broadcast stage</div>
+              </div>
             </div>
 
             <div ref={stageRef} style={{ position: "relative", aspectRatio: "16/9", borderRadius: isFs ? 0 : 18, overflow: "hidden",
@@ -610,10 +647,16 @@ export default function Studio() {
               )}
 
               {/* THE INTERPRETER LIVES IN THE STAGE: fullscreen when he's the show, movable box on a program */}
-              {pip === "stage" && (
+              {pip === "stage" && interp === "classic" && (
                 <StageInterpreter queue={mclips} loop={loopIdle} onFinished={advance}
                   overlay={overlayMode} live={interpreting} onPopOut={() => setPip("float")}
                   paused={paused} rate={rate} restartNonce={restartNonce} onProgress={onSignProgress} />
+              )}
+              {pip === "stage" && interp !== "classic" && (
+                <div style={{ position: "absolute", inset: 0 }}>
+                  <CharacterStage api={API} rig={interp} queue={cclips} onFinished={advanceC}
+                    onProgress={onSignProgress} paused={paused} rate={rate} />
+                </div>
               )}
               {pip !== "stage" && !overlayMode && (
                 <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "#7d8cb0", textAlign: "center", padding: 20 }}>
@@ -649,7 +692,7 @@ export default function Studio() {
                   {rate}×
                 </button>
               </div>
-              {karaoke && mclips.length > 0 ? (
+              {karaoke && (mclips.length > 0 || cclips.length > 0) ? (
                 /* KARAOKE caption: the words being SIGNED, the highlight follows the interpreter word by word */
                 <div className="stage-caption" style={{ zIndex: 3 }}>
                   {karaoke.words.map((w, i) => (
