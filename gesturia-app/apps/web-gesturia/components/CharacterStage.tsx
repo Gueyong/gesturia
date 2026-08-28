@@ -43,9 +43,10 @@ function Rig({ api, rig, queue, onFinished, onProgress, paused = false, rate = 1
       const box = new THREE.Box3().setFromObject(g.scene);
       const c = box.getCenter(new THREE.Vector3());
       const s = box.getSize(new THREE.Vector3());
-      // SIGNING FRAMING: the camera's subject is hands+face+torso, never the legs — put the CHEST at
-      // the origin (72% up the body), so default zoom reads like a broadcast interpreter shot
-      g.scene.position.set(-c.x, -(box.min.y + s.y * 0.72), -c.z);
+      // SIGNING FRAMING: the camera's subject is hands+face+torso, never the legs — put the UPPER CHEST
+      // at the origin (76% up the body). With the default camera this reads like a broadcast interpreter
+      // shot WITH headroom: head fully visible, hands center-frame, belt at the bottom edge.
+      g.scene.position.set(-c.x, -(box.min.y + s.y * 0.76), -c.z);
       setModel(g.scene);
       mixer.current = new THREE.AnimationMixer(g.scene);
     });
@@ -94,20 +95,24 @@ export default function CharacterStage({ api, rig, queue, onFinished, onProgress
   api: string; rig: string; queue: CharClip[]; onFinished?: (token: string) => void;
   onProgress?: (token: string, frame: number, fps: number) => void; paused?: boolean; rate?: number; hint?: boolean;
 }) {
+  const [ever, setEver] = useState(false);
+  useEffect(() => { if (queue.length) setEver(true); }, [queue.length]);
   return (
     <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden",
       background: "radial-gradient(120% 90% at 50% 0%, #1a2340 0%, #0c1122 60%, #080b16 100%)" }}>
-      <Canvas camera={{ position: [0, 0.06, 1.35], fov: 38 }} dpr={[1, 2]}>
+      <Canvas camera={{ position: [0, 0.02, 1.9], fov: 38 }} dpr={[1, 2]}>
         <hemisphereLight args={["#cfe0ff", "#20263a", 0.9]} />
         <ambientLight intensity={0.35} />
         <directionalLight position={[2.5, 4, 4]} intensity={1.5} />
         <pointLight position={[-3, 1, 2]} intensity={0.6} color="#F4B81F" />
         <Rig api={api} rig={rig} queue={queue} onFinished={onFinished} onProgress={onProgress} paused={paused} rate={rate} />
-        {/* orbit pivots on the CHEST — zooming in goes to the hands and face, never the legs */}
-        <OrbitControls enablePan={false} minDistance={0.55} maxDistance={4} target={[0, 0.02, 0]}
+        {/* orbit pivots on the UPPER CHEST. minDistance is the SIGNING FRAME bound: at maximum zoom-in
+            the view still holds head + torso + hands (brow to belt) — the essentials of sign language
+            can never be zoomed out of the picture. */}
+        <OrbitControls enablePan={false} minDistance={1.3} maxDistance={4} target={[0, 0, 0]}
           minAzimuthAngle={-0.6} maxAzimuthAngle={0.6} minPolarAngle={Math.PI / 2 - 0.5} maxPolarAngle={Math.PI / 2 + 0.35} />
       </Canvas>
-      {queue.length === 0 && hint && (
+      {!ever && hint && (
         <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "#5b6b8c", fontSize: 14, pointerEvents: "none" }}>
           The interpreter appears here — speak or type to sign
         </div>
