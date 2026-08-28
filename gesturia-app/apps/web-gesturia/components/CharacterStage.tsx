@@ -42,7 +42,10 @@ function Rig({ api, rig, queue, onFinished, onProgress, paused = false, rate = 1
       if (!alive) return;
       const box = new THREE.Box3().setFromObject(g.scene);
       const c = box.getCenter(new THREE.Vector3());
-      g.scene.position.sub(c);                          // center him on the stage
+      const s = box.getSize(new THREE.Vector3());
+      // SIGNING FRAMING: the camera's subject is hands+face+torso, never the legs — put the CHEST at
+      // the origin (72% up the body), so default zoom reads like a broadcast interpreter shot
+      g.scene.position.set(-c.x, -(box.min.y + s.y * 0.72), -c.z);
       setModel(g.scene);
       mixer.current = new THREE.AnimationMixer(g.scene);
     });
@@ -56,7 +59,12 @@ function Rig({ api, rig, queue, onFinished, onProgress, paused = false, rate = 1
     const next = mixer.current.clipAction(toClip(head));
     next.setLoop(THREE.LoopOnce, 1);
     next.clampWhenFinished = true;
-    if (action.current) { action.current.crossFadeTo(next, 0.14, false); }
+    next.reset();                                        // fresh weights/time BEFORE the fade
+    if (action.current) {
+      action.current.crossFadeTo(next, 0.14, false);
+      const prev = action.current;
+      setTimeout(() => { try { prev.stop(); mixer.current?.uncacheClip(prev.getClip()); } catch {} }, 400);
+    }
     next.play();
     action.current = next;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -89,13 +97,14 @@ export default function CharacterStage({ api, rig, queue, onFinished, onProgress
   return (
     <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden",
       background: "radial-gradient(120% 90% at 50% 0%, #1a2340 0%, #0c1122 60%, #080b16 100%)" }}>
-      <Canvas camera={{ position: [0, 0.25, 2.6], fov: 38 }} dpr={[1, 2]}>
+      <Canvas camera={{ position: [0, 0.06, 1.35], fov: 38 }} dpr={[1, 2]}>
         <hemisphereLight args={["#cfe0ff", "#20263a", 0.9]} />
         <ambientLight intensity={0.35} />
         <directionalLight position={[2.5, 4, 4]} intensity={1.5} />
         <pointLight position={[-3, 1, 2]} intensity={0.6} color="#F4B81F" />
         <Rig api={api} rig={rig} queue={queue} onFinished={onFinished} onProgress={onProgress} paused={paused} rate={rate} />
-        <OrbitControls enablePan={false} minDistance={1.2} maxDistance={7} target={[0, 0.2, 0]}
+        {/* orbit pivots on the CHEST — zooming in goes to the hands and face, never the legs */}
+        <OrbitControls enablePan={false} minDistance={0.55} maxDistance={4} target={[0, 0.02, 0]}
           minAzimuthAngle={-0.6} maxAzimuthAngle={0.6} minPolarAngle={Math.PI / 2 - 0.5} maxPolarAngle={Math.PI / 2 + 0.35} />
       </Canvas>
       {queue.length === 0 && hint && (
