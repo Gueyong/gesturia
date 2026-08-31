@@ -493,7 +493,8 @@ export default function Studio() {
   useEffect(() => {
     fetch(`${API}/v1/smplx/vocab`).then((r) => r.json()).then((v) => {
       setVocab(v.count || (v.signs?.length ?? 0));
-      const want = ["JESUS", "LORD", "PRAY", "HEAL", "GRACE", "MIRACLE", "FAITH", "BLESS", "WORSHIP", "ALTAR", "HOPE", "PEACE"];
+      // everyday vocabulary for the sample chips (faith set parked per direction — restore when confirmed)
+      const want = ["WELCOME", "FAMILY", "SCHOOL", "FRIEND", "LEARN", "TOGETHER", "HELP", "HOPE", "PEACE", "COMMUNITY", "MOTHER", "WORK"];
       const have = (v.signs || []) as string[];
       setSamples(want.filter((w) => have.includes(w)).slice(0, 8));
     }).catch(() => {});
