@@ -97,6 +97,7 @@ export default function SignEvaluator({ api, gloss, language = "en", mode = "gra
   const [hint, setHint] = useState<{ msg: string; ok: boolean }>({ msg: "", ok: false });
   const [bodySeen, setBodySeen] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
+  const [graded, setGraded] = useState(true);   // false = no verified reference: practice honestly, no grades
 
   // ── draw the tracked skeleton so the user can SEE body + hands + face are tracked ──
   const draw = (pr: any, hr: any, fr?: any) => {
@@ -241,13 +242,15 @@ export default function SignEvaluator({ api, gloss, language = "en", mode = "gra
             if (fr) {
               s.poseSeq.push(fr.pose); s.hlSeq.push(fr.hl); s.hrSeq.push(fr.hr2);
               s.faceSeq.push(fr.face); s.tsSeq.push(now);
-              const { wri, palm } = localPose(fr.pose, fr.hl, fr.hr2);
-              const msg = coachHint(wri, palm);
               s.total++;
-              if (msg) { s.offRun++; s.onRun = 0; s.offFrames++; if (s.offRun === 6 && !s.counted) { s.corrections++; s.counted = true; } }
-              else { s.onRun++; s.offRun = 0; if (s.onRun >= 5) s.counted = false; }
-              const key = msg || "ok";
-              if (key !== lastMsg) { lastMsg = key; setHint({ msg: msg || "On track — hold it", ok: !msg }); }
+              if (refTrack.current) {                     // coach ONLY against a verified reference —
+                const { wri, palm } = localPose(fr.pose, fr.hl, fr.hr2);   // never praise/criticize blind
+                const msg = coachHint(wri, palm);
+                if (msg) { s.offRun++; s.onRun = 0; s.offFrames++; if (s.offRun === 6 && !s.counted) { s.corrections++; s.counted = true; } }
+                else { s.onRun++; s.offRun = 0; if (s.onRun >= 5) s.counted = false; }
+                const key = msg || "ok";
+                if (key !== lastMsg) { lastMsg = key; setHint({ msg: msg || "On track — hold it", ok: !msg }); }
+              } else if (lastMsg !== "rec") { lastMsg = "rec"; setHint({ msg: "Recording — perform the sign", ok: true }); }
             }
           }
           const sec = Math.max(0, Math.ceil((WINDOW_MS - (now - s.start)) / 1000));
@@ -315,9 +318,13 @@ export default function SignEvaluator({ api, gloss, language = "en", mode = "gra
 
   useEffect(() => {
     refTrack.current = null;
+    setGraded(true);
     if (mode !== "grade") return;   // challenge = no reveal; teach = there's no reference yet (we're making it)
     fetch(`${api}/v1/eval/reference/${encodeURIComponent(gloss)}`).then((r) => r.ok ? r.json() : null)
-      .then((j) => { if (j) refTrack.current = { location: j.location, orientation: j.orientation }; }).catch(() => {});
+      .then((j) => {
+        if (j) { refTrack.current = { location: j.location, orientation: j.orientation }; setGraded(true); }
+        else setGraded(false);      // HONESTY GATE: no verified reference = no coaching, no fake grades
+      }).catch(() => setGraded(false));
   }, [api, gloss, mode]);
 
   const record = useCallback(async () => {
@@ -333,6 +340,14 @@ export default function SignEvaluator({ api, gloss, language = "en", mode = "gra
     if (mode === "capture") {
       onCaptured?.({ pose: data.poseSeq, hand_l: data.hlSeq, hand_r: data.hrSeq, face: data.faceSeq, ts: data.tsSeq });
       setPhase("ready");
+      return;
+    }
+    if (mode === "grade" && !graded) {
+      // HONESTY GATE: this sign has no verified reference yet — a grade would be an invention.
+      setErr(""); setReview("");
+      setResult({ overall: -1, scores: {}, distances: {}, gloss,
+        feedback: ["This sign isn't in the verified grading set yet — compare yourself with the interpreter and self-check. It joins grading as the reference library grows."] } as any);
+      setPhase("result");
       return;
     }
     setPhase("scoring");
@@ -400,7 +415,17 @@ export default function SignEvaluator({ api, gloss, language = "en", mode = "gra
         {phase === "denied" && <div className="signeval-overlay">Camera blocked — allow access and reload.</div>}
         {phase === "error" && <div className="signeval-overlay signeval-err">{err}</div>}
 
-        {result && (
+        {result && result.overall === -1 && (
+          <div className="signeval-scorecard">
+            <div className="signeval-meta" style={{ padding: "10px 4px" }}>
+              <span style={{ fontWeight: 700 }}>Practice mode</span>
+            </div>
+            <p style={{ fontSize: 13.5, lineHeight: 1.55, color: "var(--ink-soft)", margin: "4px 0 0" }}>
+              {result.feedback?.[0]}
+            </p>
+          </div>
+        )}
+        {result && result.overall !== -1 && (
           <div className="signeval-scorecard">
             <div className="signeval-overall" style={{ borderColor: band(mark) }}>
               <b style={{ color: band(mark) }}>{mark}</b><span>/ 100</span>

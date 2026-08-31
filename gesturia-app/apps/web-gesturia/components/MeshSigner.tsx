@@ -24,9 +24,10 @@ let inflateCache: Promise<ArrayBuffer | null> | null = null;
 function loadVerts(clip: MeshClip): Promise<Float32Array> {
   if (!clipCache.has(clip.vertsUrl)) {
     clipCache.set(clip.vertsUrl, fetch(clip.vertsUrl).then((r) => r.arrayBuffer()).then((b) => new Float32Array(b)));
-    if (clipCache.size > 12) {                     // bound memory: drop the oldest cached clip
-      const k = clipCache.keys().next().value;
-      if (k && k !== clip.vertsUrl) clipCache.delete(k);
+    while (clipCache.size > 5) {                   // bound memory HARD: vertex clips are 10-50MB each —
+      const k = clipCache.keys().next().value;     // a deep cache is how the browser eats the laptop's RAM
+      if (!k || k === clip.vertsUrl) break;
+      clipCache.delete(k);
     }
   }
   return clipCache.get(clip.vertsUrl)!;
