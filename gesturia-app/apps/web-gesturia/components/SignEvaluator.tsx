@@ -62,8 +62,8 @@ const toLocal = (p: number[], f: any) => { const d = sub(p, f.origin); return [d
 const toLocalDir = (d: number[], f: any) => unit([dot(d, f.x), dot(d, f.up), dot(d, f.z)]);
 
 export type FaceFrame = { blend: Record<string, number>; head: number[] | null } | null;
-export type CapturedMotion = { pose: number[][][]; hand_l: number[][][]; hand_r: number[][][]; face: FaceFrame[]; ts: number[] };
-export type LiveFrame = { pose: number[][]; hand_l: number[][]; hand_r: number[][]; face: FaceFrame; ts: number };
+export type CapturedMotion = { pose: number[][][]; hand_l: number[][][]; hand_r: number[][][]; face: FaceFrame[]; vis: number[][]; ts: number[] };
+export type LiveFrame = { pose: number[][]; hand_l: number[][]; hand_r: number[][]; face: FaceFrame; vis: number[]; ts: number };
 
 // the blendshapes our retarget actually uses (jaw + smile + brows + pucker + frown) — tiny payload
 const BLEND_KEYS = ["jawOpen", "mouthSmileLeft", "mouthSmileRight", "mouthPucker", "mouthFunnel", "browInnerUp",
@@ -135,6 +135,9 @@ export default function SignEvaluator({ api, gloss, language = "en", mode = "gra
     const pw = pr?.worldLandmarks?.[0]; const pImg = pr?.landmarks?.[0];
     if (!pw || !pImg) return null;
     const pose = pw.map((p: any) => [p.x, p.y, p.z]);
+    // visibility per landmark: the pose model ALWAYS outputs 33 points — when a limb leaves the frame it
+    // hallucinates positions. The server needs the scores to ease untracked arms to rest, not act guesses.
+    const vis = pImg.map((p: any) => Math.round((p.visibility ?? 0) * 100) / 100);
     const zeros = () => Array.from({ length: 21 }, () => [0, 0, 0]);
     const hl = zeros(), hr2 = zeros();
     const hands = hr?.worldLandmarks || []; const handsImg = hr?.landmarks || [];
@@ -162,7 +165,7 @@ export default function SignEvaluator({ api, gloss, language = "en", mode = "gra
       const head = d && d.length === 16 ? [d[0], d[4], d[8], d[1], d[5], d[9], d[2], d[6], d[10]] : null;
       face = { blend, head };
     }
-    return { pose, hl, hr2, face };
+    return { pose, hl, hr2, face, vis };
   };
 
   const localPose = (pose: number[][], hl: number[][], hr: number[][]) => {
@@ -229,7 +232,7 @@ export default function SignEvaluator({ api, gloss, language = "en", mode = "gra
         if (bodyOK !== lastBody) { lastBody = bodyOK; setBodySeen(bodyOK); }
         if (bodyOK && onFrameRef.current) {                 // stream frames for the live avatar mirror
           const lf = readFrame(pr, hr, fres);
-          if (lf) onFrameRef.current({ pose: lf.pose, hand_l: lf.hl, hand_r: lf.hr2, face: lf.face, ts });
+          if (lf) onFrameRef.current({ pose: lf.pose, hand_l: lf.hl, hand_r: lf.hr2, face: lf.face, vis: lf.vis, ts });
         }
         const s = sessRef.current;
         if (s) {
@@ -241,7 +244,7 @@ export default function SignEvaluator({ api, gloss, language = "en", mode = "gra
             const fr = readFrame(pr, hr, fres);
             if (fr) {
               s.poseSeq.push(fr.pose); s.hlSeq.push(fr.hl); s.hrSeq.push(fr.hr2);
-              s.faceSeq.push(fr.face); s.tsSeq.push(now);
+              s.faceSeq.push(fr.face); s.visSeq.push(fr.vis); s.tsSeq.push(now);
               s.total++;
               if (refTrack.current) {                     // coach ONLY against a verified reference —
                 const { wri, palm } = localPose(fr.pose, fr.hl, fr.hr2);   // never praise/criticize blind
@@ -333,12 +336,12 @@ export default function SignEvaluator({ api, gloss, language = "en", mode = "gra
     for (let c = 3; c >= 1; c--) { setCountdown(c); setPhase("count"); await new Promise((r) => setTimeout(r, 700)); }
     setCountdown(0); setPhase("recording");
     await new Promise<void>((resolve) => {
-      sessRef.current = { poseSeq: [], hlSeq: [], hrSeq: [], faceSeq: [], tsSeq: [], total: 0, offFrames: 0, offRun: 0, onRun: 0, counted: false, corrections: 0, badRun: 0, start: performance.now(), resolve };
+      sessRef.current = { poseSeq: [], hlSeq: [], hrSeq: [], faceSeq: [], visSeq: [], tsSeq: [], total: 0, offFrames: 0, offRun: 0, onRun: 0, counted: false, corrections: 0, badRun: 0, start: performance.now(), resolve };
     });
     const data = finishedRef.current; finishedRef.current = null;
     if (!data || data.poseSeq.length < 8) { setErr("I couldn't see your upper body — step back so your head, shoulders and hands are all in frame."); setPhase("error"); return; }
     if (mode === "capture") {
-      onCaptured?.({ pose: data.poseSeq, hand_l: data.hlSeq, hand_r: data.hrSeq, face: data.faceSeq, ts: data.tsSeq });
+      onCaptured?.({ pose: data.poseSeq, hand_l: data.hlSeq, hand_r: data.hrSeq, face: data.faceSeq, vis: data.visSeq, ts: data.tsSeq });
       setPhase("ready");
       return;
     }

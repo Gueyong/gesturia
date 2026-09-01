@@ -17,17 +17,21 @@ const API = typeof window !== "undefined"
   : (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8020");
 
 type Phase = "name" | "capture" | "fitting" | "edit" | "committing" | "done" | "error";
-type Smooth = { pose: number[][] | null; hl: number[][] | null; hr: number[][] | null; face: FaceFrame };
+type Smooth = { pose: number[][] | null; hl: number[][] | null; hr: number[][] | null; face: FaceFrame; missL: number; missR: number };
 
 const present = (h?: number[][]) => Array.isArray(h) && h.some((p) => p && (p[0] || p[1] || p[2]));
 const ema = (prev: number[][] | null, cur: number[][], a: number) =>
   prev && prev.length === cur.length ? cur.map((p, i) => p.map((c, j) => prev[i][j] * (1 - a) + c * a)) : cur;
+const HOLD_FRAMES = 6;   // ~200ms: bridges detector blinks; a hand gone LONGER really left -> tell the server
 
-/** hold + light EMA: a missing hand/face keeps its last state (stays quiet); everything is smoothed. */
+/** hold + light EMA: a BRIEFLY missing hand keeps its last state (detector blink), but a hand that stays
+ *  gone is released — holding it forever froze the avatar in a claw when the signer dropped their hands. */
 function processOne(s: Smooth, f: LiveFrame) {
   const pose = ema(s.pose, f.pose, 0.6); s.pose = pose;
-  if (present(f.hand_l)) s.hl = ema(s.hl, f.hand_l, 0.6);
-  if (present(f.hand_r)) s.hr = ema(s.hr, f.hand_r, 0.6);
+  if (present(f.hand_l)) { s.hl = ema(s.hl, f.hand_l, 0.6); s.missL = 0; }
+  else if (++s.missL > HOLD_FRAMES) s.hl = null;         // zeros = "not seen" -> the avatar relaxes the hand
+  if (present(f.hand_r)) { s.hr = ema(s.hr, f.hand_r, 0.6); s.missR = 0; }
+  else if (++s.missR > HOLD_FRAMES) s.hr = null;
   if (f.face) {
     const prev = s.face;
     if (prev) {
@@ -36,7 +40,7 @@ function processOne(s: Smooth, f: LiveFrame) {
       s.face = { blend, head: f.face.head || prev.head };
     } else s.face = f.face;
   }
-  return { pose, hand_l: s.hl || f.hand_l || [], hand_r: s.hr || f.hand_r || [], face: s.face, ts: f.ts };
+  return { pose, hand_l: s.hl || f.hand_l || [], hand_r: s.hr || f.hand_r || [], face: s.face, vis: f.vis, ts: f.ts };
 }
 
 export default function LiveCapture() {
@@ -52,7 +56,7 @@ export default function LiveCapture() {
   const failsRef = useRef(0);
   const [take, setTake] = useState(0);
   const bufRef = useRef<ReturnType<typeof processOne>[]>([]);
-  const smoothRef = useRef<Smooth>({ pose: null, hl: null, hr: null, face: null });
+  const smoothRef = useRef<Smooth>({ pose: null, hl: null, hr: null, face: null, missL: 0, missR: 0 });
   const paramsRef = useRef<number[][] | null>(null);               // full (T,182) of the editable clip
   const capMetaRef = useRef<{ ts0: number; c0: number } | null>(null);
   const recRef = useRef<MediaRecorder | null>(null);               // raw webcam, for the studio lift
@@ -83,7 +87,7 @@ export default function LiveCapture() {
   // live mirror: every ~160ms retarget the buffered window (body + hands + face) and enqueue the clip
   useEffect(() => {
     if (phase !== "capture") { bufRef.current = []; return; }
-    smoothRef.current = { pose: null, hl: null, hr: null, face: null };
+    smoothRef.current = { pose: null, hl: null, hr: null, face: null, missL: 0, missR: 0 };
     let alive = true;
     const iv = setInterval(async () => {
       const w = bufRef.current.splice(0, bufRef.current.length);
@@ -92,7 +96,7 @@ export default function LiveCapture() {
         const m = await fetch(`${API}/v1/vocab/mirror`, {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ pose: w.map((f) => f.pose), hand_l: w.map((f) => f.hand_l),
-            hand_r: w.map((f) => f.hand_r), face: w.map((f) => f.face) }),
+            hand_r: w.map((f) => f.hand_r), face: w.map((f) => f.face), vis: w.map((f) => f.vis) }),
         }).then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.json(); });
         failsRef.current = 0;
         if (alive) setEngineDown(false);
@@ -116,7 +120,7 @@ export default function LiveCapture() {
     try {
       const r = await fetch(`${API}/v1/vocab/mirror`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pose: m.pose, hand_l: m.hand_l, hand_r: m.hand_r, face: m.face, ts: m.ts, trim: true }),
+        body: JSON.stringify({ pose: m.pose, hand_l: m.hand_l, hand_r: m.hand_r, face: m.face, vis: m.vis, ts: m.ts, trim: true }),
       }).then((res) => res.json());
       if (!r?.token || !r?.params) throw new Error("couldn't read the motion — step back so your hands are in frame and try again");
       paramsRef.current = r.params;
