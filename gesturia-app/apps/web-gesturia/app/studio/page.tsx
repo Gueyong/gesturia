@@ -154,8 +154,14 @@ export default function Studio() {
   // realtime playback queue: clips play back-to-back with a crossfaded seam
   const [mclips, setMclips] = useState<MeshClip[]>([]);
   // CHOOSE YOUR INTERPRETER: classic = our vertex-streamed avatar; a named rig = bake-on-demand character
-  const [interp, setInterp] = useState<"classic" | "moe">("classic");
+  const [interp, setInterp] = useState<string>("classic");
   const interpRef = useRef(interp); interpRef.current = interp;
+  const [rigNames, setRigNames] = useState<string[]>(["moe"]);   // live list from the engine
+  useEffect(() => {
+    fetch(`${API}/v1/character/rigs`).then((r) => r.json())
+      .then((d) => { if (Array.isArray(d?.rigs) && d.rigs.length) setRigNames(d.rigs); })
+      .catch(() => { /* keep the fallback */ });
+  }, []);
   const [cclips, setCclips] = useState<CharClip[]>([]);
   const [nowChips, setNowChips] = useState<Chips | null>(null);
   // karaoke captions: the caption shows WHAT IS BEING SIGNED and the highlight follows the interpreter
@@ -623,7 +629,7 @@ export default function Studio() {
                 {/* CHOOSE YOUR INTERPRETER — same dictionary, same intelligence, any body */}
                 <div style={{ display: "flex", gap: 4, background: "var(--panel-2)", padding: 3, borderRadius: 999, border: "1px solid var(--line)" }}
                   title="Choose your interpreter — the same signs, performed by different characters">
-                  {([["classic", "Classic"], ["moe", "Moe"]] as const).map(([k, label]) => (
+                  {[["classic", "Classic"], ...rigNames.map((r) => [r, r.charAt(0).toUpperCase() + r.slice(1)])].map(([k, label]) => (
                     <button key={k} onClick={() => setInterp(k)} className="g-pill"
                       style={{ padding: ".3rem .7rem", fontSize: ".72rem", fontWeight: 700, boxShadow: "none",
                         background: interp === k ? "var(--gold)" : "transparent", color: interp === k ? "#1C1A17" : "var(--ink-soft)" }}>
