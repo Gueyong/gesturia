@@ -56,7 +56,54 @@ Everything else is provisional or quarantined. Fingerspelling — which never li
 - The legacy ASL-derived dictionary is hereby a **placeholder scheduled for replacement**, not a
   foundation.
 
-## 3. The doors — highest-precision intake for Cameroonian recordings
+## 3. THE CAPITAL ISSUE — certify the chain, or nothing else counts
+
+*"Real production readiness = Gesturia can take any well-taped sign from anywhere, add it to its
+vocab, apply it to any model, and the person who signed sees THEMSELVES — the gesture preserved
+through and through, 90–99%."* That is the core, and it is certified — not assumed — like this:
+
+**The fidelity loop (the only definition of done):**
+```
+signer's video ──► frame collection ──► extraction ──► SMPL-X ──► render on ANY avatar
+      ▲                                                                    │
+      └──────────── side-by-side: source video vs avatar ◄─────────────────┘
+                    the SIGNER judges: "that is me" → sign enters the vocab
+```
+
+**Certification bench (running now, on the actual failed videos):** we still hold the source
+URLs of every legacy sign. The forensic protocol per failed sign:
+1. Fetch the exact source video (e.g. HELLO = SignSchool 1920×1080 studio footage — the material
+   was NEVER the excuse).
+2. Measure what the extractor saw: per-frame hand detection, coverage, where and why it lost the
+   hand (motion blur, detector miss, crop, threshold).
+3. Re-extract with corrective settings / stronger models until coverage and articulation hold
+   through the WHOLE sign — or prove the ceiling and say so.
+4. Render old vs new on the avatar at microscope zoom. Numbers + pictures, no claims.
+**Bench results, day one (same videos, measured):**
+
+| Sign (source) | Stock v3 door | v3.1 door (native-res detect + tracked rescue) |
+|---|---|---|
+| HELLO (SignSchool 1080p) | handR **68%**, handL 0% | handR **96%** ✅, handL 61% (rest-edge hand, honest) |
+| WELCOME (SignSchool 1080p) | handR **50%**, handL 0% | handR 61%, handL 62% — **not at bar**, next failure mode to hunt |
+
+Root cause, proven: the stock pipeline DETECTED HANDS ON A ~512px DOWNSCALE of 1080p footage —
+the pixels were paid for and thrown away; fast/edge frames fell below the tiny-blurry-hand
+threshold. v3.1 (now THE production door in `v3_extract.py`, used by the vocab studio lifter):
+1. detection at native resolution with a size sanity band;
+2. tracked rescue — a missed frame re-runs the pose stage on the last-known box and re-tracks
+   from the hand's own predicted keypoints; a hand unseen for 8 true frames is treated as gone
+   (rescue may never hallucinate).
+Also exposed: HELLO's "missing left hand" was a one-handed sign honestly reported — triage's
+resting-arm threshold over-flags (fix queued). WELCOME shows a second failure mode (hands
+clasped/overlapping at the body) — the bench continues until every mode is named and killed or
+its ceiling proven. Then the full 3,713-video re-extraction runs as an overnight batch and every
+re-extracted sign goes through /review before performing.
+
+**The quality bar per ingested sign:** hand coverage ≥95% of active frames; no wrist flips; the
+signer's own approval on the side-by-side. Below the bar → the door refuses the take and asks for
+a re-record on the spot (better to re-tape 10 seconds than ship a wrong sign forever).
+
+## 3b. The doors — highest-precision intake for Cameroonian recordings
 
 When the community hands us video, what Gesturia makes of it must be the best the world knows how.
 
